@@ -157,6 +157,68 @@ def diagnose(spec: dict) -> dict:
     }
 
 
+MAX_VALUES = 5
+MAX_ISSUES = 6
+
+
+def normalize_charter(d: dict) -> dict:
+    """Validate the charter the agent produced; None if essentially empty."""
+    d = d or {}
+    values = [str(v).strip() for v in d.get("values", []) if str(v).strip()][:MAX_VALUES]
+    charter = {
+        "mission": str(d.get("mission", "")).strip(),
+        "values": values,
+        "decision_rule": str(d.get("decision_rule", "")).strip(),
+        "communication_rule": str(d.get("communication_rule", "")).strip(),
+        "credit_rule": str(d.get("credit_rule", "")).strip(),
+    }
+    if not any([charter["mission"], values, charter["decision_rule"],
+                charter["communication_rule"], charter["credit_rule"]]):
+        return None
+    return charter
+
+
+def normalize_issues(lst: list) -> list:
+    """Validate the issues list (IDS): each needs a title; owner defaults to TBD."""
+    out: List[Dict] = []
+    for it in (lst or [])[:MAX_ISSUES]:
+        title = str(it.get("issue", "")).strip()
+        if not title:
+            continue
+        out.append({
+            "issue": title,
+            "suggested_owner": str(it.get("suggested_owner", "TBD")).strip() or "TBD",
+            "next_step": str(it.get("next_step", "")).strip(),
+        })
+    return out or None
+
+
+def build_workspace(data: dict) -> tuple:
+    """Assemble a full workspace from ONE agent response, running the deterministic
+    engine locally. Returns (workspace, skills_applied)."""
+    charter = normalize_charter(data.get("charter"))
+    # If the agent only put the mission in the charter, feed it back so the coach
+    # knows a foundation exists.
+    if charter and charter.get("mission") and not data.get("mission"):
+        data["mission"] = charter["mission"]
+
+    diagnosis = diagnose(data)
+    issues = normalize_issues(data.get("issues"))
+
+    ws = {"spec": data, "diagnosis": diagnosis, "charter": charter, "issues": issues}
+
+    skills = ["🧠 Read your team into structure"]
+    if charter:
+        skills.append("📜 Drafted a charter")
+    if diagnosis:
+        skills.append("🧩 Mapped ownership & ran the RACI check")
+    if issues:
+        skills.append("🔟 Surfaced issues (IDS)")
+    if diagnosis and diagnosis["coach"].get("primary"):
+        skills.append("🎯 Recommended the next practice")
+    return ws, skills
+
+
 def answer(provider: str, model: str, api_key: str, workspace: dict,
            conversation: List[Dict]) -> str:
     """Answer a follow-up question, grounded in everything the agent built."""

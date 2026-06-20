@@ -16,14 +16,14 @@ from teamdoctor import agent, doctor, llm
 st.set_page_config(page_title="Team Doctor", page_icon="🩺", layout="wide")
 
 st.title("🩺 Team Doctor")
-st.caption("Describe your team in plain English — an orchestrator agent calls "
-           "specialists to draft your charter, map ownership, run a health check, "
-           "and surface your issues. The agents draft; the diagnosis comes from "
-           "deterministic rules, so every flag is traceable, not guessed.")
+st.caption("Describe your team in plain English — one AI agent applies several "
+           "skills in a single pass: it drafts your charter, maps ownership, runs "
+           "a health check, and surfaces your issues. The agent drafts; the "
+           "diagnosis comes from deterministic rules, so every flag is traceable.")
 
 st.session_state.setdefault("messages", [])
 st.session_state.setdefault("workspace", None)
-st.session_state.setdefault("steps", [])
+st.session_state.setdefault("skills", [])
 
 # ── sidebar: pick any model ───────────────────────────────────────────────────
 with st.sidebar:
@@ -49,10 +49,9 @@ with st.sidebar:
                    "(`ollama serve`).")
 
     st.divider()
-    st.caption("How it works: an orchestrator agent calls specialist sub-agents "
-               "(Charter, Accountability, Cadence) to build your operating system "
-               "layer by layer. The RACI + coach verdict is deterministic — the "
-               "agents never invent a finding.")
+    st.caption("How it works: one agent applies several skills in a single pass — "
+               "structure, charter, ownership, issues. The RACI + coach verdict is "
+               "deterministic, so the agent never invents a finding.")
 
 
 def _need_key_missing() -> bool:
@@ -71,7 +70,7 @@ def run_intake(user_text: str) -> None:
     try:
         if not _has_content(st.session_state.workspace):
             result = agent.run(provider, model, api_key, msgs)
-            st.session_state.steps = result["steps"]
+            st.session_state.skills = result.get("skills", [])
             if _has_content(result.get("workspace")):
                 st.session_state.workspace = result["workspace"]
             msgs.append({"role": "assistant", "content": result["text"]})
@@ -160,7 +159,7 @@ if c2.button("✨ Run sample", use_container_width=True):
 if c3.button("🔄 Start over", use_container_width=True):
     st.session_state.messages = []
     st.session_state.workspace = None
-    st.session_state.steps = []
+    st.session_state.skills = []
     st.rerun()
 
 # ── two-pane layout: conversation + diagnosis ─────────────────────────────────
@@ -176,19 +175,11 @@ with left:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
 
-    if st.session_state.steps:
-        tool_label = {"set_team": "🧩 Mapped the team",
-                      "draft_charter": "📜 Charter Agent drafted the charter",
-                      "run_health_check": "🩺 Ran the health check",
-                      "surface_issues": "🔟 Cadence Agent surfaced issues",
-                      "ask_user": "❓ Asked for detail",
-                      "final_answer": "✅ Wrote the summary"}
-        with st.expander(f"🤖 How the agents worked ({len(st.session_state.steps)} steps)"):
-            for i, s in enumerate(st.session_state.steps, 1):
-                label = tool_label.get(s["tool"], s["tool"])
-                st.markdown(f"**{i}. {label}**")
-                if s.get("thought"):
-                    st.caption(s["thought"])
+    if st.session_state.skills:
+        with st.expander(f"🧠 Skills the agent used ({len(st.session_state.skills)})",
+                         expanded=True):
+            for s in st.session_state.skills:
+                st.markdown(f"- {s}")
 
 with right:
     st.markdown("#### Your operating system")
