@@ -19,14 +19,49 @@ from teamdoctor import health, llm
 from teamdoctor import raci as raci_check
 from teamdoctor.models import Member, Workstream
 
-SAMPLE_TEAM = (
-    "We're a 5-person startup building a scheduling app for clinics. Our CTO Sara "
-    "builds the product, runs all the deployments, handles customer support, AND "
-    "manages the website — basically everything technical. Two cofounders, Mike "
-    "and Jen, are supposed to run sales and marketing but nothing is shipping. Our "
-    "designer Tom does the design work. Nobody owns finance. We argue about every "
-    "decision and keep redoing things."
-)
+# Real-world-style case studies — vivid, messy, the way someone would actually
+# describe their team out loud. Each lights up different findings across layers.
+SAMPLES: dict = {
+    "Series A startup (people burning out)": (
+        "We're an 8-person B2B software startup that just raised a seed round. Our "
+        "CEO Priya is great with investors but also jumps into every sales call, so "
+        "both she and our head of sales Sven think they own the sales number — deals "
+        "stall when they disagree. Our CTO Tom is brilliant but owns the platform, "
+        "the infrastructure, the product roadmap, AND all hiring — he's the "
+        "bottleneck for everything and he's exhausted. Two engineers, Jade and "
+        "Marco, do great work but only when Tom tells them exactly what to do. Lena "
+        "is our product manager but has no real authority — Tom overrides her. Ivy "
+        "runs marketing completely alone with no clear goals. Ben handles customer "
+        "success and is drowning in tickets. Nobody owns finance — we almost missed "
+        "payroll last month. We never write decisions down, so we keep relitigating "
+        "the same arguments, and people are starting to burn out."
+    ),
+    "Nonprofit board (co-chairs, slow decisions)": (
+        "We're the volunteer board of a community arts nonprofit, about six people. "
+        "Our two co-chairs, Dana and Paul, jointly run everything — every decision "
+        "needs both of them to agree, so things move slowly and sometimes nothing "
+        "happens at all. Our treasurer Ana is barely involved; she gets handed the "
+        "books once a year. Our volunteer coordinator Kim does an amazing job but is "
+        "completely overloaded — she runs volunteers, events, AND community outreach "
+        "by herself. Nobody really owns grant writing, even though that's where most "
+        "of our funding should come from. We don't track anything week to week, and "
+        "we only meet when there's a crisis."
+    ),
+    "University club (volunteers, churn)": (
+        "We're a university robotics club — around seven active members, but it "
+        "changes every semester. Our president Alex basically does everything: "
+        "recruiting, sponsorships, build planning, and running every meeting — and "
+        "gets burnt out every single year. The other officers have titles like 'VP' "
+        "and 'Treasurer' but nobody's really sure what they actually do. We have two "
+        "or three members who show up but never get assigned anything, so they drift "
+        "away. We argue about design decisions for weeks and never actually decide. "
+        "When seniors graduate, all their knowledge leaves with them because nothing "
+        "is written down."
+    ),
+}
+
+# Default sample (first one) kept for backward compatibility.
+SAMPLE_TEAM = next(iter(SAMPLES.values()))
 
 EXTRACT_SYSTEM = """You are the intake step of a team-health tool. Turn the \
 user's description of their team into structured data. Reply with ONE JSON \

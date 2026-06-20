@@ -147,15 +147,17 @@ def render_workspace(ws: dict) -> None:
 
 
 # ── quick actions ─────────────────────────────────────────────────────────────
-b1, b2 = st.columns(2)
-if b1.button("✨ Try a sample team", use_container_width=True):
+c1, c2, c3 = st.columns([2, 1, 1])
+sample_name = c1.selectbox("Sample case study", list(doctor.SAMPLES.keys()),
+                           label_visibility="collapsed")
+if c2.button("✨ Run sample", use_container_width=True):
     if _need_key_missing():
         st.warning("Add an API key in the sidebar first, or switch to Ollama.")
     else:
-        with st.spinner("Diagnosing a sample team…"):
-            run_intake(doctor.SAMPLE_TEAM)
+        with st.spinner("The agents are building this team's operating system…"):
+            run_intake(doctor.SAMPLES[sample_name])
         st.rerun()
-if b2.button("🔄 Start over", use_container_width=True):
+if c3.button("🔄 Start over", use_container_width=True):
     st.session_state.messages = []
     st.session_state.workspace = None
     st.session_state.steps = []
