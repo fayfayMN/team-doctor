@@ -11,17 +11,19 @@ Run locally:
 
 import streamlit as st
 
-from teamdoctor import doctor, llm
+from teamdoctor import agent, doctor, llm
 
 st.set_page_config(page_title="Team Doctor", page_icon="🩺", layout="wide")
 
 st.title("🩺 Team Doctor")
-st.caption("Describe your team in plain English — get an instant, explainable "
-           "health check. AI understands what you wrote; the diagnosis itself is "
-           "pure deterministic logic, so every flag is traceable, not guessed.")
+st.caption("Describe your team in plain English — an AI agent maps it, runs a "
+           "health check, and explains what's wrong. The agent decides what to "
+           "do; the diagnosis comes from deterministic rules, so every flag is "
+           "traceable, not guessed.")
 
 st.session_state.setdefault("messages", [])
 st.session_state.setdefault("diagnosis", None)
+st.session_state.setdefault("steps", [])
 
 # ── sidebar: pick any model ───────────────────────────────────────────────────
 with st.sidebar:
@@ -57,21 +59,17 @@ def _need_key_missing() -> bool:
 
 
 def run_intake(user_text: str) -> None:
-    """One user turn: extract+diagnose on the first pass, then grounded Q&A."""
+    """One user turn. First pass runs the agent (think -> act -> observe loop);
+    once a diagnosis exists, follow-ups are grounded Q&A on its findings."""
     msgs = st.session_state.messages
     msgs.append({"role": "user", "content": user_text})
     try:
         if st.session_state.diagnosis is None:
-            spec = doctor.extract(provider, model, api_key, msgs)
-            if not spec.get("ready"):
-                q = spec.get("follow_up") or ("Tell me a bit more — who's on the "
-                                              "team and what are they working on?")
-                msgs.append({"role": "assistant", "content": q})
-            else:
-                diag = doctor.diagnose(spec)
-                st.session_state.diagnosis = diag
-                msgs.append({"role": "assistant",
-                             "content": doctor.summary_text(diag)})
+            result = agent.run(provider, model, api_key, msgs)
+            st.session_state.steps = result["steps"]
+            if result.get("diagnosis"):
+                st.session_state.diagnosis = result["diagnosis"]
+            msgs.append({"role": "assistant", "content": result["text"]})
         else:
             ans = doctor.answer(provider, model, api_key,
                                 st.session_state.diagnosis, msgs)
@@ -122,6 +120,7 @@ if b1.button("✨ Try a sample team", use_container_width=True):
 if b2.button("🔄 Start over", use_container_width=True):
     st.session_state.messages = []
     st.session_state.diagnosis = None
+    st.session_state.steps = []
     st.rerun()
 
 # ── two-pane layout: conversation + diagnosis ─────────────────────────────────
@@ -136,6 +135,18 @@ with left:
     for m in st.session_state.messages:
         with st.chat_message(m["role"]):
             st.markdown(m["content"])
+
+    if st.session_state.steps:
+        tool_label = {"set_team": "🧩 Mapped the team",
+                      "run_health_check": "🩺 Ran the health check",
+                      "ask_user": "❓ Asked for detail",
+                      "final_answer": "✅ Wrote the diagnosis"}
+        with st.expander(f"🤖 How the agent worked ({len(st.session_state.steps)} steps)"):
+            for i, s in enumerate(st.session_state.steps, 1):
+                label = tool_label.get(s["tool"], s["tool"])
+                st.markdown(f"**{i}. {label}**")
+                if s.get("thought"):
+                    st.caption(s["thought"])
 
 with right:
     st.markdown("#### Diagnosis")
