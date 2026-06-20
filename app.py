@@ -16,13 +16,13 @@ from teamdoctor import agent, doctor, llm
 st.set_page_config(page_title="Team Doctor", page_icon="🩺", layout="wide")
 
 st.title("🩺 Team Doctor")
-st.caption("Describe your team in plain English — an AI agent maps it, runs a "
-           "health check, and explains what's wrong. The agent decides what to "
-           "do; the diagnosis comes from deterministic rules, so every flag is "
-           "traceable, not guessed.")
+st.caption("Describe your team in plain English — an orchestrator agent calls "
+           "specialists to draft your charter, map ownership, run a health check, "
+           "and surface your issues. The agents draft; the diagnosis comes from "
+           "deterministic rules, so every flag is traceable, not guessed.")
 
 st.session_state.setdefault("messages", [])
-st.session_state.setdefault("diagnosis", None)
+st.session_state.setdefault("workspace", None)
 st.session_state.setdefault("steps", [])
 
 # ── sidebar: pick any model ───────────────────────────────────────────────────
@@ -49,37 +49,57 @@ with st.sidebar:
                    "(`ollama serve`).")
 
     st.divider()
-    st.caption("How it works: the AI turns your words into a team structure, then "
-               "a deterministic engine (RACI + EOS coach) produces the diagnosis. "
-               "The AI never invents a finding.")
+    st.caption("How it works: an orchestrator agent calls specialist sub-agents "
+               "(Charter, Accountability, Cadence) to build your operating system "
+               "layer by layer. The RACI + coach verdict is deterministic — the "
+               "agents never invent a finding.")
 
 
 def _need_key_missing() -> bool:
     return cfg.get("needs_key", True) and not api_key
 
 
+def _has_content(ws) -> bool:
+    return bool(ws) and any(ws.get(k) for k in ("charter", "diagnosis", "issues"))
+
+
 def run_intake(user_text: str) -> None:
-    """One user turn. First pass runs the agent (think -> act -> observe loop);
-    once a diagnosis exists, follow-ups are grounded Q&A on its findings."""
+    """One user turn. First pass runs the orchestrator (think -> act -> observe);
+    once a workspace exists, follow-ups are grounded Q&A on everything built."""
     msgs = st.session_state.messages
     msgs.append({"role": "user", "content": user_text})
     try:
-        if st.session_state.diagnosis is None:
+        if not _has_content(st.session_state.workspace):
             result = agent.run(provider, model, api_key, msgs)
             st.session_state.steps = result["steps"]
-            if result.get("diagnosis"):
-                st.session_state.diagnosis = result["diagnosis"]
+            if _has_content(result.get("workspace")):
+                st.session_state.workspace = result["workspace"]
             msgs.append({"role": "assistant", "content": result["text"]})
         else:
             ans = doctor.answer(provider, model, api_key,
-                                st.session_state.diagnosis, msgs)
+                                st.session_state.workspace, msgs)
             msgs.append({"role": "assistant", "content": ans})
     except llm.LLMError as e:
         msgs.append({"role": "assistant", "content": f"⚠️ {e}"})
 
 
+def render_charter(charter: dict) -> None:
+    st.markdown("### 📜 Charter")
+    if charter.get("mission"):
+        st.markdown(f"**Mission:** {charter['mission']}")
+    if charter.get("values"):
+        st.markdown("**Values:** " + " · ".join(charter["values"]))
+    rules = [("Decisions", charter.get("decision_rule")),
+             ("Communication", charter.get("communication_rule")),
+             ("Credit", charter.get("credit_rule"))]
+    for label, text in rules:
+        if text:
+            st.markdown(f"**{label}:** {text}")
+
+
 def render_diagnosis(diag: dict) -> None:
     r = diag["raci_result"]
+    st.markdown("### 🧩 Ownership (RACI)")
     if diag.get("summary"):
         st.caption(f"_What you described:_ {diag['summary']}")
     st.metric("RACI structure score", f"{round(r['score'] * 100)}%",
@@ -90,8 +110,7 @@ def render_diagnosis(diag: dict) -> None:
 
     primary = diag["coach"].get("primary")
     if primary:
-        st.divider()
-        st.markdown(f"### 🎯 Start here: {primary['title']}")
+        st.markdown(f"#### 🎯 Start here: {primary['title']}")
         st.markdown(f"**Why:** {primary['why']}")
         st.markdown(f"**Do this:** {primary['practice']}")
     also = diag["coach"].get("also", [])
@@ -100,11 +119,30 @@ def render_diagnosis(diag: dict) -> None:
             for a in also:
                 st.markdown(f"- {a}")
     st.caption(f"Maturity stage: **{diag['coach'].get('maturity', '—')}**  ·  "
-               "Every flag above is a traceable rule — not AI guesswork.")
+               "Every flag here is a traceable rule — not AI guesswork.")
 
-    st.download_button("📄 Download this report (.md)",
-                       data=doctor.report_md(diag),
-                       file_name=f"team-doctor-{diag['team_name'].lower().replace(' ', '-')}.md",
+
+def render_issues(issues: list) -> None:
+    st.markdown("### 🔟 Issues to work (IDS)")
+    for it in issues:
+        st.markdown(f"**{it['issue']}**")
+        st.caption(f"Owner: {it['suggested_owner']} · Next step: {it['next_step']}")
+
+
+def render_workspace(ws: dict) -> None:
+    if ws.get("charter"):
+        render_charter(ws["charter"])
+        st.divider()
+    if ws.get("diagnosis"):
+        render_diagnosis(ws["diagnosis"])
+        st.divider()
+    if ws.get("issues"):
+        render_issues(ws["issues"])
+        st.divider()
+    team = (ws.get("diagnosis") or {}).get("team_name", "team")
+    st.download_button("📄 Download this plan (.md)",
+                       data=doctor.report_md(ws),
+                       file_name=f"team-doctor-{team.lower().replace(' ', '-')}.md",
                        mime="text/markdown")
 
 
@@ -119,7 +157,7 @@ if b1.button("✨ Try a sample team", use_container_width=True):
         st.rerun()
 if b2.button("🔄 Start over", use_container_width=True):
     st.session_state.messages = []
-    st.session_state.diagnosis = None
+    st.session_state.workspace = None
     st.session_state.steps = []
     st.rerun()
 
@@ -138,10 +176,12 @@ with left:
 
     if st.session_state.steps:
         tool_label = {"set_team": "🧩 Mapped the team",
+                      "draft_charter": "📜 Charter Agent drafted the charter",
                       "run_health_check": "🩺 Ran the health check",
+                      "surface_issues": "🔟 Cadence Agent surfaced issues",
                       "ask_user": "❓ Asked for detail",
-                      "final_answer": "✅ Wrote the diagnosis"}
-        with st.expander(f"🤖 How the agent worked ({len(st.session_state.steps)} steps)"):
+                      "final_answer": "✅ Wrote the summary"}
+        with st.expander(f"🤖 How the agents worked ({len(st.session_state.steps)} steps)"):
             for i, s in enumerate(st.session_state.steps, 1):
                 label = tool_label.get(s["tool"], s["tool"])
                 st.markdown(f"**{i}. {label}**")
@@ -149,11 +189,12 @@ with left:
                     st.caption(s["thought"])
 
 with right:
-    st.markdown("#### Diagnosis")
-    if st.session_state.diagnosis:
-        render_diagnosis(st.session_state.diagnosis)
+    st.markdown("#### Your operating system")
+    if _has_content(st.session_state.workspace):
+        render_workspace(st.session_state.workspace)
     else:
-        st.info("Your team's health check will appear here once you describe it.")
+        st.info("Your charter, ownership check, and issues will appear here once "
+                "you describe your team.")
 
 # ── chat input (always pinned to the bottom) ──────────────────────────────────
 prompt = st.chat_input("Describe your team — or ask a follow-up question…")

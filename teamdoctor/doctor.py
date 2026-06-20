@@ -122,12 +122,12 @@ def diagnose(spec: dict) -> dict:
     }
 
 
-def answer(provider: str, model: str, api_key: str, diagnosis: dict,
+def answer(provider: str, model: str, api_key: str, workspace: dict,
            conversation: List[Dict]) -> str:
-    """Answer a follow-up question, grounded in the deterministic findings."""
-    context = findings_context(diagnosis)
+    """Answer a follow-up question, grounded in everything the agent built."""
+    context = workspace_context(workspace)
     messages = [{"role": "system",
-                 "content": ANSWER_SYSTEM + "\n\nDIAGNOSIS:\n" + context}]
+                 "content": ANSWER_SYSTEM + "\n\nWHAT WE BUILT:\n" + context}]
     messages += conversation
     return llm.chat(provider, model, api_key, messages, temperature=0.4)
 
@@ -168,29 +168,78 @@ def findings_context(diag: dict) -> str:
     return "\n".join(lines)
 
 
-def report_md(diag: dict) -> str:
+def workspace_context(ws: dict) -> str:
+    """Compact, ground-truth summary of everything the agent built — for Q&A."""
+    lines: List[str] = []
+    charter = ws.get("charter")
+    if charter:
+        lines.append("CHARTER:")
+        if charter.get("mission"):
+            lines.append(f"- Mission: {charter['mission']}")
+        if charter.get("values"):
+            lines.append(f"- Values: {', '.join(charter['values'])}")
+        for key in ("decision_rule", "communication_rule", "credit_rule"):
+            if charter.get(key):
+                lines.append(f"- {key.replace('_', ' ').title()}: {charter[key]}")
+    diag = ws.get("diagnosis")
+    if diag:
+        lines.append("")
+        lines.append(findings_context(diag))
+    issues = ws.get("issues")
+    if issues:
+        lines.append("")
+        lines.append("ISSUES (IDS):")
+        for it in issues:
+            lines.append(f"- {it['issue']} (owner: {it['suggested_owner']}; "
+                         f"next: {it['next_step']})")
+    return "\n".join(lines) if lines else "Nothing built yet."
+
+
+def report_md(ws: dict) -> str:
     """A take-home report a guest can download after the demo."""
-    r = diag["raci_result"]
-    out = [f"# Team Doctor report — {diag['team_name']}",
+    diag = ws.get("diagnosis") or {}
+    team_name = diag.get("team_name") or "Your team"
+    out = [f"# Team Doctor report — {team_name}",
            f"_Generated {date.today().isoformat()}_", ""]
     if diag.get("summary"):
         out += [f"**What you described:** {diag['summary']}", ""]
-    out += [f"## RACI structure score: {round(r['score'] * 100)}%", ""]
-    for f in r["findings"]:
-        tag = {"error": "[FIX]", "warn": "[RISK]", "ok": "[OK]"}.get(f["level"], "-")
-        out.append(f"- {tag} {_strip_md(f['msg'])}")
-    out.append("")
-    primary = diag["coach"].get("primary")
-    if primary:
-        out += ["## Start here",
-                f"**{primary['title']}**", "",
-                f"_Why:_ {_strip_md(primary['why'])}", "",
-                f"_Do this:_ {_strip_md(primary['practice'])}", ""]
-    also = diag["coach"].get("also", [])
-    if also:
-        out += ["## Other things to watch"] + [f"- {_strip_md(a)}" for a in also] + [""]
+
+    charter = ws.get("charter")
+    if charter:
+        out += ["## Charter"]
+        if charter.get("mission"):
+            out += [f"**Mission:** {charter['mission']}", ""]
+        if charter.get("values"):
+            out += ["**Values:** " + ", ".join(charter["values"]), ""]
+        for key in ("decision_rule", "communication_rule", "credit_rule"):
+            if charter.get(key):
+                out += [f"**{key.replace('_', ' ').title()}:** {charter[key]}"]
+        out += [""]
+
+    if diag:
+        r = diag["raci_result"]
+        out += [f"## RACI structure score: {round(r['score'] * 100)}%", ""]
+        for f in r["findings"]:
+            tag = {"error": "[FIX]", "warn": "[RISK]", "ok": "[OK]"}.get(f["level"], "-")
+            out.append(f"- {tag} {_strip_md(f['msg'])}")
+        out.append("")
+        primary = diag["coach"].get("primary")
+        if primary:
+            out += ["## Start here",
+                    f"**{primary['title']}**", "",
+                    f"_Why:_ {_strip_md(primary['why'])}", "",
+                    f"_Do this:_ {_strip_md(primary['practice'])}", ""]
+
+    issues = ws.get("issues")
+    if issues:
+        out += ["## Issues to work (IDS)"]
+        for it in issues:
+            out += [f"- **{it['issue']}** — owner: {it['suggested_owner']}; "
+                    f"next step: {it['next_step']}"]
+        out += [""]
+
     out += ["---",
-            "Diagnosis by Team Doctor. Every flag is a deterministic rule — "
-            "AI structured your description, but the verdict is traceable logic.",
+            "Built by Team Doctor. AI drafted the charter and issues; the RACI "
+            "and coach findings are deterministic rules — traceable, not guessed.",
             "© 2026 Feifei Li."]
     return "\n".join(out)
