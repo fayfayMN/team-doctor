@@ -41,16 +41,35 @@ snapshot as ONE JSON object and NOTHING else:
 
 The skills you apply in this single pass:
 - Structure: extract members, workstreams, and ownership (RACI). A=Accountable
-  (ideally one per workstream), R=Responsible (does the work), C=Consulted,
-  I=Informed. Spell names exactly. Infer obvious ownership; never invent people or
-  work they didn't mention.
+  (owns the outcome, ideally one per workstream), R=Responsible (does the hands-on
+  work), C=Consulted, I=Informed. Spell names exactly.
+  * Make a SEPARATE workstream for each distinct area of work mentioned. If someone
+    "does recruiting, sponsorships, build planning, and meetings", that is FOUR
+    workstreams, not one merged bucket — do not combine distinct functions. This is
+    how an overloaded person becomes visible.
+  CRITICAL — assign roles ONLY where the description supports them:
+  * If one person is described as doing everything, give those assignments to that
+    person alone. Do NOT invent other "Responsible" people to fill the gaps.
+  * If a person's role is vague or they're described as doing nothing clear
+    (e.g. an officer "nobody is sure what they do", a member who "never gets
+    assigned anything"), leave them with NO RACI assignment so the gap shows, and
+    PROCEED. Undefined roles are exactly what we want to surface — never ask the
+    user to clarify them.
+  * Do NOT add a Responsible person to a workstream unless the description actually
+    says someone does that work.
+  * Gaps ARE the diagnosis. It is correct and expected for the result to show no
+    owner, an overloaded person, or uninvolved members — never paper over them by
+    inventing roles. Never invent people or work they didn't mention.
 - Charter: draft a tight, specific founding charter (3-5 short values; one-sentence
   rules). Not generic boilerplate.
 - Issues: surface 3-6 real, solvable problems, most important first. suggested_owner
   must be a named member, or "TBD" if unclear; give one concrete next_step each.
 
-Be faithful to what they said. If the description is too vague to identify the
-members or their work, set ready=false and ask ONE concise follow_up."""
+Be faithful to what they said. Set ready=false ONLY if you genuinely cannot
+identify who is on the team or what the team works on at all. Undefined or unclear
+individual roles are NOT a reason to ask — leave those people unassigned and
+proceed; that gap is part of the diagnosis. When in doubt, set ready=true and
+produce the snapshot."""
 
 
 def run(provider: str, model: str, api_key: str,
