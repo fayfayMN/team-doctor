@@ -340,3 +340,98 @@ def report_md(ws: dict) -> str:
             "and coach findings are deterministic rules — traceable, not guessed.",
             "© 2026 Feifei Li."]
     return "\n".join(out)
+
+
+def _esc(s) -> str:
+    return (str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"))
+
+
+def _md_bold(s: str) -> str:
+    """Escape, then turn **bold** markers into <strong>."""
+    return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", _esc(s))
+
+
+def report_html(ws: dict) -> str:
+    """A clean, self-contained HTML report — looks professional and prints to PDF."""
+    diag = ws.get("diagnosis") or {}
+    team = diag.get("team_name") or "Your team"
+    charter = ws.get("charter")
+    issues = ws.get("issues")
+
+    badge = {"error": ("#A32D2D", "#FCEBEB", "FIX"),
+             "warn": ("#854F0B", "#FAEEDA", "RISK"),
+             "ok": ("#3B6D11", "#EAF3DE", "OK")}
+
+    s = []
+    s.append("<!doctype html><html lang='en'><head><meta charset='utf-8'>")
+    s.append(f"<title>Team Doctor — {_esc(team)}</title>")
+    s.append("<style>"
+             "*{box-sizing:border-box}"
+             "body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;"
+             "color:#1a1a1a;line-height:1.55;max-width:760px;margin:32px auto;padding:0 24px}"
+             "h1{font-size:26px;margin:0 0 4px}h2{font-size:18px;margin:28px 0 10px;"
+             "border-bottom:2px solid #eee;padding-bottom:6px}"
+             ".sub{color:#666;font-size:13px;margin:0 0 18px}"
+             ".pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;"
+             "border-radius:10px;margin-right:8px;vertical-align:middle}"
+             ".finding{margin:6px 0;padding:8px 12px;border-radius:6px;background:#fafafa}"
+             ".score{font-size:34px;font-weight:700;margin:4px 0}"
+             ".chip{display:inline-block;background:#eef;border-radius:12px;padding:3px 10px;"
+             "margin:3px 6px 3px 0;font-size:13px}"
+             ".issue{margin:10px 0;padding:10px 14px;border-left:3px solid #534AB7;background:#f7f7fb}"
+             ".issue .meta{color:#555;font-size:13px;margin-top:3px}"
+             ".rule{margin:4px 0;font-size:14px}"
+             "footer{margin-top:32px;border-top:1px solid #eee;padding-top:12px;"
+             "color:#888;font-size:12px}"
+             "@media print{body{margin:0}}"
+             "</style></head><body>")
+
+    s.append(f"<h1>🩺 Team Doctor — {_esc(team)}</h1>")
+    s.append(f"<p class='sub'>Generated {date.today().isoformat()}</p>")
+    if diag.get("summary"):
+        s.append(f"<p><em>What you described:</em> {_esc(diag['summary'])}</p>")
+
+    if charter:
+        s.append("<h2>📜 Charter</h2>")
+        if charter.get("mission"):
+            s.append(f"<p><strong>Mission:</strong> {_esc(charter['mission'])}</p>")
+        if charter.get("values"):
+            s.append("<p><strong>Values:</strong> "
+                     + "".join(f"<span class='chip'>{_esc(v)}</span>"
+                               for v in charter["values"]) + "</p>")
+        for key, label in (("decision_rule", "Decisions"),
+                           ("communication_rule", "Communication"),
+                           ("credit_rule", "Credit")):
+            if charter.get(key):
+                s.append(f"<p class='rule'><strong>{label}:</strong> "
+                         f"{_esc(charter[key])}</p>")
+
+    if diag:
+        r = diag["raci_result"]
+        s.append("<h2>🧩 Ownership (RACI)</h2>")
+        s.append(f"<div class='score'>{round(r['score'] * 100)}%"
+                 "<span style='font-size:14px;color:#888'> structure score</span></div>")
+        for f in r["findings"]:
+            color, bg, tag = badge.get(f["level"], ("#444", "#f0f0f0", "•"))
+            s.append(f"<div class='finding'>"
+                     f"<span class='pill' style='color:{color};background:{bg}'>{tag}</span>"
+                     f"{_md_bold(f['msg'])}</div>")
+        primary = diag["coach"].get("primary")
+        if primary:
+            s.append("<h2>🎯 Start here</h2>")
+            s.append(f"<p><strong>{_esc(primary['title'])}</strong></p>")
+            s.append(f"<p><em>Why:</em> {_esc(primary['why'])}</p>")
+            s.append(f"<p><em>Do this:</em> {_esc(primary['practice'])}</p>")
+
+    if issues:
+        s.append("<h2>🔟 Issues to work (IDS)</h2>")
+        for it in issues:
+            s.append(f"<div class='issue'><strong>{_esc(it['issue'])}</strong>"
+                     f"<div class='meta'>Owner: {_esc(it['suggested_owner'])} · "
+                     f"Next step: {_esc(it['next_step'])}</div></div>")
+
+    s.append("<footer>Built by Team Doctor. AI drafted the charter and issues; the "
+             "RACI and coach findings are deterministic rules — traceable, not "
+             "guessed.<br>© 2026 Feifei Li. All rights reserved.</footer>")
+    s.append("</body></html>")
+    return "".join(s)

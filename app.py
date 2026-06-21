@@ -139,10 +139,13 @@ def render_workspace(ws: dict) -> None:
         render_issues(ws["issues"])
         st.divider()
     team = (ws.get("diagnosis") or {}).get("team_name", "team")
-    st.download_button("📄 Download this plan (.md)",
-                       data=doctor.report_md(ws),
-                       file_name=f"team-doctor-{team.lower().replace(' ', '-')}.md",
-                       mime="text/markdown")
+    slug = team.lower().replace(" ", "-")
+    st.download_button("📄 Download this plan (HTML — opens in browser, print to PDF)",
+                       data=doctor.report_html(ws),
+                       file_name=f"team-doctor-{slug}.html",
+                       mime="text/html")
+    st.caption("Tip: open the file and use your browser's **Print → Save as PDF** "
+               "for a polished PDF.")
 
 
 # ── quick actions ─────────────────────────────────────────────────────────────
