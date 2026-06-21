@@ -148,22 +148,50 @@ def render_workspace(ws: dict) -> None:
                "for a polished PDF.")
 
 
-# ── quick actions ─────────────────────────────────────────────────────────────
-c1, c2, c3 = st.columns([2, 1, 1])
-sample_name = c1.selectbox("Sample case study", list(doctor.SAMPLES.keys()),
-                           label_visibility="collapsed")
-if c2.button("✨ Run sample", use_container_width=True):
-    if _need_key_missing():
-        st.warning("Add an API key in the sidebar first, or switch to Ollama.")
-    else:
-        with st.spinner("The agents are building this team's operating system…"):
-            run_intake(doctor.SAMPLES[sample_name])
+# ── input: describe your own team (primary action) ────────────────────────────
+if not _has_content(st.session_state.workspace):
+    st.markdown("#### Describe your team")
+    desc = st.text_area(
+        "Describe your team", height=150, label_visibility="collapsed",
+        placeholder="Paste or type a description in plain English — for example:\n\n"
+        "“We're a 6-person startup. Our founder does sales, product, and support. "
+        "Two engineers wait to be told what to do. Nobody owns finance. We argue "
+        "about decisions for weeks and never write anything down.”")
+    up = st.file_uploader("…or upload a .txt / .md description", type=["txt", "md"])
+    d1, d2 = st.columns([1, 2])
+    if d1.button("🩺 Diagnose my team", type="primary", use_container_width=True):
+        text = desc.strip()
+        if not text and up is not None:
+            try:
+                text = up.read().decode("utf-8", errors="ignore").strip()
+            except Exception:
+                text = ""
+        if not text:
+            st.warning("Type or paste a description first (or pick a sample below).")
+        elif _need_key_missing():
+            st.warning("Add an API key in the sidebar first, or switch to Ollama.")
+        else:
+            with st.spinner("The agent is building your operating system…"):
+                run_intake(text)
+            st.rerun()
+
+    st.markdown("###### — or try a sample case study —")
+    s1, s2 = st.columns([3, 1])
+    sample_name = s1.selectbox("Sample case study", list(doctor.SAMPLES.keys()),
+                               label_visibility="collapsed")
+    if s2.button("✨ Run sample", use_container_width=True):
+        if _need_key_missing():
+            st.warning("Add an API key in the sidebar first, or switch to Ollama.")
+        else:
+            with st.spinner("The agent is building this team's operating system…"):
+                run_intake(doctor.SAMPLES[sample_name])
+            st.rerun()
+else:
+    if st.button("🔄 Start over / diagnose another team"):
+        st.session_state.messages = []
+        st.session_state.workspace = None
+        st.session_state.skills = []
         st.rerun()
-if c3.button("🔄 Start over", use_container_width=True):
-    st.session_state.messages = []
-    st.session_state.workspace = None
-    st.session_state.skills = []
-    st.rerun()
 
 # ── two-pane layout: conversation + diagnosis ─────────────────────────────────
 left, right = st.columns(2)
@@ -193,7 +221,10 @@ with right:
                 "you describe your team.")
 
 # ── chat input (always pinned to the bottom) ──────────────────────────────────
-prompt = st.chat_input("Describe your team — or ask a follow-up question…")
+_chat_ph = ("Ask a follow-up question about the diagnosis…"
+            if _has_content(st.session_state.workspace)
+            else "Or describe your team right here…")
+prompt = st.chat_input(_chat_ph)
 if prompt:
     if _need_key_missing():
         st.warning("Add an API key in the sidebar first, or switch to Ollama.")
