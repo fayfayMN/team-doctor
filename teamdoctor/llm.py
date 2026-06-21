@@ -18,7 +18,14 @@ from typing import Dict, List, Optional
 
 import requests
 
-TIMEOUT = 60
+# Cloud models answer in seconds; a local model must load into VRAM and generate
+# a large JSON, so it gets a much longer leash (especially on the first call).
+TIMEOUT = 90
+LOCAL_TIMEOUT = 300
+
+
+def _timeout_for(cfg) -> int:
+    return LOCAL_TIMEOUT if "localhost" in cfg.get("base_url", "") else TIMEOUT
 
 # Free options first on purpose — they're the headline for a no-cost demo.
 PROVIDERS: Dict[str, Dict] = {
@@ -73,7 +80,7 @@ PROVIDERS: Dict[str, Dict] = {
         "secret_key": None,
         "get_key": "https://ollama.com/download",
         "kind": "openai",
-        "supports_json_mode": False,
+        "supports_json_mode": True,
         "needs_key": False,
     },
 }
@@ -104,7 +111,7 @@ def _openai(cfg, model, api_key, messages, temperature, json_mode) -> str:
     if json_mode:
         body["response_format"] = {"type": "json_object"}
     try:
-        r = requests.post(url, headers=headers, json=body, timeout=TIMEOUT)
+        r = requests.post(url, headers=headers, json=body, timeout=_timeout_for(cfg))
     except requests.exceptions.ConnectionError:
         raise LLMError(_conn_hint(cfg))
     except requests.exceptions.Timeout:
@@ -135,7 +142,7 @@ def _anthropic(cfg, model, api_key, messages, temperature) -> str:
     if system:
         body["system"] = system
     try:
-        r = requests.post(url, headers=headers, json=body, timeout=TIMEOUT)
+        r = requests.post(url, headers=headers, json=body, timeout=_timeout_for(cfg))
     except requests.exceptions.ConnectionError:
         raise LLMError("Couldn't reach Anthropic. Check your internet connection.")
     except requests.exceptions.Timeout:
