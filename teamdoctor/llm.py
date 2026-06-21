@@ -156,10 +156,17 @@ def _conn_hint(cfg) -> str:
 
 
 def _http_hint(r) -> str:
+    msg = ""
     try:
-        err = r.json().get("error", {})
-        msg = err.get("message") if isinstance(err, dict) else str(err)
+        body = r.json()
     except ValueError:
+        body = None
+    if isinstance(body, dict):
+        err = body.get("error", body)
+        msg = err.get("message", "") if isinstance(err, dict) else str(err)
+    elif body is not None:
+        msg = str(body)[:200]
+    else:
         msg = r.text[:200]
     msg = (msg or "").strip()
     if r.status_code in (401, 403):
