@@ -11,7 +11,7 @@ Run locally:
 
 import streamlit as st
 
-from teamdoctor import agent, doctor, llm
+from teamdoctor import agent, doctor, ingest, llm
 
 st.set_page_config(page_title="Team Doctor", page_icon="🩺", layout="wide")
 
@@ -157,14 +157,22 @@ if not _has_content(st.session_state.workspace):
         "“We're a 6-person startup. Our founder does sales, product, and support. "
         "Two engineers wait to be told what to do. Nobody owns finance. We argue "
         "about decisions for weeks and never write anything down.”")
-    up = st.file_uploader("…or upload a .txt / .md description", type=["txt", "md"])
+    up = st.file_uploader("…or upload a description (PDF, Word, .txt, .md)",
+                          type=["pdf", "docx", "doc", "txt", "md"])
     d1, d2 = st.columns([1, 2])
     if d1.button("🩺 Diagnose my team", type="primary", use_container_width=True):
         text = desc.strip()
         if not text and up is not None:
             try:
-                text = up.read().decode("utf-8", errors="ignore").strip()
-            except Exception:
+                text = ingest.extract_text(up).strip()
+            except Exception as e:
+                text = ""
+                st.warning(f"Couldn't read that file: {e}. Try a PDF with selectable "
+                           "text or a .docx, or paste the description.")
+            if text and len(text) < ingest.MIN_USABLE:
+                st.warning("Couldn't extract readable text — the file may be a "
+                           "scanned PDF or a legacy .doc. Try a text-based PDF, a "
+                           ".docx, or paste the description directly.")
                 text = ""
         if not text:
             st.warning("Type or paste a description first (or pick a sample below).")
