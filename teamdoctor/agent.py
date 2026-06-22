@@ -61,6 +61,11 @@ The skills you apply in this single pass:
     user to clarify them.
   * Do NOT add a Responsible person to a workstream unless the description actually
     says someone does that work.
+  * DO assign a plausible Accountable owner to each area when there's any signal —
+    a person's title, who runs or started it, who clearly cares. A real team has
+    owners; only leave an area unowned when the description shows no one owns it
+    (e.g. "nobody owns finance"). Inferring an *owner* is fine; inventing *doers*
+    is not.
   * Gaps ARE the diagnosis. It is correct and expected for the result to show no
     owner, an overloaded person, or uninvolved members — never paper over them by
     inventing roles. Never invent people or work they didn't mention.

@@ -241,33 +241,48 @@ if not _has_content(st.session_state.workspace):
         member_names = _clean_rows(members_rows, "name")
         ws_names = _clean_rows(ws_rows, "workstream")
 
-        raci_rows = []
-        if member_names and ws_names:
-            st.markdown("**Who owns what?** (Accountable = owns it; Responsible = does it)")
-            st.caption("We only ask Accountable + Responsible — that's all the health "
-                       "check needs. (Full RACI adds Consulted/Informed, but those "
-                       "don't change the diagnosis.)")
-            for w in ws_names:
-                a_col, r_col = st.columns([2, 3])
-                a = a_col.selectbox(f"Accountable · {w}", ["— none —"] + member_names,
-                                    key=f"a_{w}")
-                rs = r_col.multiselect(f"Responsible · {w}", member_names, key=f"r_{w}")
-                if a != "— none —":
-                    raci_rows.append({"workstream": w, "member": a, "code": "A"})
-                for r in rs:
-                    raci_rows.append({"workstream": w, "member": r, "code": "R"})
+        if not (member_names and ws_names):
+            st.info("Add at least one person and one area of work above — then a "
+                    "dropdown appears to set who owns each area.")
+        else:
+            # Ownership lives in a form so all picks are captured together on submit,
+            # and the widgets are keyed by POSITION (not the area's text) so editing
+            # an area name can't reset a selection.
+            with st.form("ownership_form"):
+                st.markdown("**Who owns what?** "
+                            "(Accountable = owns it · Responsible = does it)")
+                st.caption("Set an Accountable owner for each area, then click Run. "
+                           "(Consulted/Informed aren't needed — they don't change "
+                           "the diagnosis.)")
+                picks = []
+                for i, w in enumerate(ws_names):
+                    a_col, r_col = st.columns([2, 3])
+                    a = a_col.selectbox(f"Accountable · {w}",
+                                        ["— none —"] + member_names, key=f"a_{i}")
+                    rs = r_col.multiselect(f"Responsible · {w}", member_names,
+                                           key=f"r_{i}")
+                    picks.append((w, a, rs))
+                submitted = st.form_submit_button("🩺 Run diagnosis", type="primary")
 
-        if st.button("🩺 Run diagnosis", type="primary"):
-            if not member_names or not ws_names:
-                st.warning("Add at least one member and one area of work.")
-            else:
-                run_spec({
-                    "team_name": team_name or "Your team", "mission": mission,
-                    "summary": "", "charter": None, "issues": None,
-                    "members": [{"name": n} for n in member_names],
-                    "workstreams": [{"name": w} for w in ws_names],
-                    "raci": raci_rows})
-                st.rerun()
+            if submitted:
+                raci_rows = []
+                for w, a, rs in picks:
+                    if a != "— none —":
+                        raci_rows.append({"workstream": w, "member": a, "code": "A"})
+                    for r in rs:
+                        raci_rows.append({"workstream": w, "member": r, "code": "R"})
+                if not raci_rows:
+                    st.warning("No owners assigned yet — use the **Accountable** "
+                               "dropdowns above to set who owns each area, then run "
+                               "again.")
+                else:
+                    run_spec({
+                        "team_name": team_name or "Your team", "mission": mission,
+                        "summary": "", "charter": None, "issues": None,
+                        "members": [{"name": n} for n in member_names],
+                        "workstreams": [{"name": w} for w in ws_names],
+                        "raci": raci_rows})
+                    st.rerun()
         st.caption("Want a drafted charter + an issues list too? Use the "
                    "plain-English option with your own free AI key.")
 
