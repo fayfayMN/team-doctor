@@ -185,15 +185,31 @@ if not _has_content(st.session_state.workspace):
                                 placeholder="one line — what the team is here to do")
         c_m, c_w = st.columns(2)
         with c_m:
-            st.markdown("**Members**")
+            st.markdown("**People on the team**")
+            st.caption("One row per person. Role is optional.")
             members_rows = st.data_editor(
                 [{"name": "", "role": ""}], num_rows="dynamic", key="m_ed",
-                use_container_width=True, hide_index=True)
+                use_container_width=True, hide_index=True,
+                column_config={
+                    "name": st.column_config.TextColumn("Name"),
+                    "role": st.column_config.TextColumn("Role (optional)"),
+                })
         with c_w:
-            st.markdown("**Areas of work (workstreams)**")
+            st.markdown("**Areas of work**")
+            st.caption("The main jobs your team is responsible for — one per row. "
+                       "Examples:\n\n"
+                       "• **Startup:** Product · Sales · Marketing · Finance · Support\n\n"
+                       "• **Club:** Recruiting · Events · Fundraising · Social media\n\n"
+                       "• **Café:** Kitchen · Front of house · Marketing · Finance")
             ws_rows = st.data_editor(
                 [{"workstream": ""}], num_rows="dynamic", key="w_ed",
-                use_container_width=True, hide_index=True)
+                use_container_width=True, hide_index=True,
+                column_config={
+                    "workstream": st.column_config.TextColumn(
+                        "Area of work",
+                        help="A job the team owns — e.g. Sales, Product, Finance, "
+                             "Marketing, Operations"),
+                })
 
         member_names = [str(r.get("name", "")).strip() for r in members_rows
                         if str(r.get("name", "")).strip()]
