@@ -120,7 +120,8 @@ def render_diagnosis(diag: dict) -> None:
     if primary:
         st.markdown(f"#### 🎯 Start here: {primary['title']}")
         st.markdown(f"**Why:** {primary['why']}")
-        st.markdown(f"**Do this:** {primary['practice']}")
+        st.markdown("**Do this:**")
+        st.markdown(primary["practice"])
     also = diag["coach"].get("also", [])
     if also:
         with st.expander("Other things to watch"):
@@ -128,6 +129,16 @@ def render_diagnosis(diag: dict) -> None:
                 st.markdown(f"- {a}")
     st.caption(f"Maturity stage: **{diag['coach'].get('maturity', '—')}**  ·  "
                "Every flag here is a traceable rule — not AI guesswork.")
+    with st.expander("ℹ️ What do “RACI” and “EOS” mean?"):
+        st.markdown(
+            "**RACI** makes ownership clear for each area of work:\n"
+            "- **A — Accountable:** the one person who owns the outcome\n"
+            "- **R — Responsible:** who actually does the work\n"
+            "- **C / I — Consulted / Informed:** who gives input / is kept in the loop\n\n"
+            "**EOS (Entrepreneurial Operating System)** is a popular, lightweight way to "
+            "run a small business or team (from the book *Traction*). The coach borrows "
+            "its proven habits: one clear owner per function, a short weekly meeting to "
+            "solve issues, a few quarterly priorities, and a simple scorecard.")
 
 
 def render_issues(issues: list) -> None:
@@ -219,6 +230,9 @@ if not _has_content(st.session_state.workspace):
         raci_rows = []
         if member_names and ws_names:
             st.markdown("**Who owns what?** (Accountable = owns it; Responsible = does it)")
+            st.caption("We only ask Accountable + Responsible — that's all the health "
+                       "check needs. (Full RACI adds Consulted/Informed, but those "
+                       "don't change the diagnosis.)")
             for w in ws_names:
                 a_col, r_col = st.columns([2, 3])
                 a = a_col.selectbox(f"Accountable · {w}", ["— none —"] + member_names,

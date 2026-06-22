@@ -75,8 +75,12 @@ def coach(state: Dict) -> Dict:
             "Write your charter",
             "There's no shared agreement on mission, values, and how you work. "
             "Everything else drifts without it.",
-            "EOS calls this the Vision: agree what you're here to do and the few "
-            "rules for how you operate.",
+            "Spend 30 minutes writing four things where everyone can see them: "
+            "(1) your mission in one sentence, (2) three to five values or ground "
+            "rules, (3) how you'll decide when you disagree, and (4) how credit "
+            "gets shared. Keep it to one page, and have every person say yes to it. "
+            "(EOS — a lightweight operating system for small teams — calls this your "
+            "'Vision': the shared agreement everything else builds on.)",
             "error"), "also": also, "maturity": "Forming"}
 
     if not state.get("has_workstreams") or state.get("raci_errors", 0) > 0:
@@ -84,8 +88,13 @@ def coach(state: Dict) -> Dict:
             "Fix ownership (RACI)",
             "Some areas have no single owner, or ownership is split — the #1 source "
             "of free-riders and blame.",
-            "EOS Accountability Chart: exactly one Accountable owner per function. "
-            "Resolve the errors flagged above.",
+            "Make a one-page ownership chart and give every area exactly one owner. "
+            "Work the red flags above, in order: (1) for any area with no owner, "
+            "assign one person now — even temporarily; (2) where two people share an "
+            "area, pick the single person who makes the final call; (3) if someone "
+            "owns too much, hand one of their areas to a member who has no role yet. "
+            "(This is the EOS 'Accountability Chart' — one clear owner per function. "
+            "EOS is a simple operating system for small teams.)",
             "error"), "also": also, "maturity": "Forming"}
 
     if state.get("decisions_count", 0) == 0:
@@ -93,8 +102,11 @@ def coach(state: Dict) -> Dict:
             "Start a weekly issues + decisions rhythm",
             "Decisions aren't being recorded, so 'we never agreed to that' arguments "
             "and quiet revisionism are inevitable.",
-            "EOS Level 10 meeting + IDS (Identify, Discuss, Solve): each week, work "
-            "a short issues list to closure and log what you decided.",
+            "Hold a short weekly meeting where you work through a list of issues and "
+            "actually decide each one — then write the decision down so no one "
+            "re-litigates it later. The recipe (EOS calls it a 'Level 10' meeting run "
+            "with IDS): Identify the real issue, Discuss it briefly, then Solve it "
+            "with a clear decision and one owner. Same day and time every week.",
             "warn"), "also": also, "maturity": "Operating"}
 
     if not state.get("has_rocks"):
