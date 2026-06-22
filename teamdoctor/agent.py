@@ -47,6 +47,10 @@ The skills you apply in this single pass:
     "does recruiting, sponsorships, build planning, and meetings", that is FOUR
     workstreams, not one merged bucket — do not combine distinct functions. This is
     how an overloaded person becomes visible.
+  * Name each workstream as a SHORT function label of 1-3 words ("Recruiting",
+    "Fundraising", "Events", "Finance") — never a full sentence, a task, or a date.
+    In the "raci" list, copy each workstream and member name EXACTLY as you wrote it
+    above, or the ownership won't link.
   CRITICAL — assign roles ONLY where the description supports them:
   * If one person is described as doing everything, give those assignments to that
     person alone. Do NOT invent other "Responsible" people to fill the gaps.

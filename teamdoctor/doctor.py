@@ -296,21 +296,39 @@ def extract(provider: str, model: str, api_key: str,
 
 def diagnose(spec: dict) -> dict:
     """Run the deterministic engine on an extracted spec."""
-    members = [Member.create((m.get("name") or "Unnamed").strip(),
-                             (m.get("role") or "").strip())
-               for m in spec.get("members", []) if m.get("name")]
-    workstreams = [Workstream.create((w.get("name") or "Untitled").strip(),
-                                     (w.get("description") or "").strip())
-                   for w in spec.get("workstreams", []) if w.get("name")]
+    junk = {"", "none", "unnamed", "untitled", "n/a", "na", "tbd", "null"}
+
+    def _clean(v) -> str:
+        return (str(v) if v is not None else "").strip()
+
+    members = [Member.create(_clean(m.get("name")), _clean(m.get("role")))
+               for m in spec.get("members", [])
+               if _clean(m.get("name")).lower() not in junk]
+    workstreams = [Workstream.create(_clean(w.get("name")), _clean(w.get("description")))
+                   for w in spec.get("workstreams", [])
+                   if _clean(w.get("name")).lower() not in junk]
 
     member_id = {m.name.lower(): m.id for m in members}
     ws_id = {w.name.lower(): w.id for w in workstreams}
 
+    def _match(name, idmap):
+        """Exact name match, then a tolerant contains-match so a slightly
+        reworded reference (AI) still links to the right item."""
+        key = _clean(name).lower()
+        if not key:
+            return None
+        if key in idmap:
+            return idmap[key]
+        for nm, _id in idmap.items():
+            if key in nm or nm in key:
+                return _id
+        return None
+
     raci: Dict[str, Dict[str, str]] = {w.id: {} for w in workstreams}
     for row in spec.get("raci", []):
-        wid = ws_id.get(str(row.get("workstream", "")).strip().lower())
-        mid = member_id.get(str(row.get("member", "")).strip().lower())
-        code = str(row.get("code", "")).strip().upper()
+        wid = _match(row.get("workstream"), ws_id)
+        mid = _match(row.get("member"), member_id)
+        code = _clean(row.get("code")).upper()
         if wid and mid and code in ("A", "R", "C", "I"):
             raci.setdefault(wid, {})[mid] = code
 

@@ -71,6 +71,22 @@ def run_spec(spec: dict) -> None:
     st.session_state.skills = skills
 
 
+def _clean_rows(rows, field):
+    """Read names from a data_editor: drop blank/None cells, dedupe, keep order.
+
+    Streamlit returns empty cells as None — without this, str(None) leaks a
+    phantom 'None' entry into the team.
+    """
+    seen, out = set(), []
+    for r in rows:
+        v = r.get(field)
+        v = (str(v) if v is not None else "").strip()
+        if v and v.lower() not in seen:
+            seen.add(v.lower())
+            out.append(v)
+    return out
+
+
 def run_intake(user_text: str) -> None:
     """One user turn. First pass runs the orchestrator (think -> act -> observe);
     once a workspace exists, follow-ups are grounded Q&A on everything built."""
@@ -222,10 +238,8 @@ if not _has_content(st.session_state.workspace):
                              "Marketing, Operations"),
                 })
 
-        member_names = [str(r.get("name", "")).strip() for r in members_rows
-                        if str(r.get("name", "")).strip()]
-        ws_names = [str(r.get("workstream", "")).strip() for r in ws_rows
-                    if str(r.get("workstream", "")).strip()]
+        member_names = _clean_rows(members_rows, "name")
+        ws_names = _clean_rows(ws_rows, "workstream")
 
         raci_rows = []
         if member_names and ws_names:
