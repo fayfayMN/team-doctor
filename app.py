@@ -16,10 +16,10 @@ from teamdoctor import agent, doctor, ingest, llm
 st.set_page_config(page_title="Team Doctor", page_icon="🩺", layout="wide")
 
 st.title("🩺 Team Doctor")
-st.caption("Describe your team in plain English — one AI agent applies several "
-           "skills in a single pass: it drafts your charter, maps ownership, runs "
-           "a health check, and surfaces your issues. The agent drafts; the "
-           "diagnosis comes from deterministic rules, so every flag is traceable.")
+st.caption("Get an instant, explainable team health check — charter, ownership "
+           "map, issues, and the one thing to fix next. The diagnosis is "
+           "deterministic, so it's free and needs no API key. Optionally, let AI "
+           "read a plain-English description (with your own free key).")
 
 st.session_state.setdefault("messages", [])
 st.session_state.setdefault("workspace", None)
@@ -27,7 +27,9 @@ st.session_state.setdefault("skills", [])
 
 # ── sidebar: pick any model ───────────────────────────────────────────────────
 with st.sidebar:
-    st.subheader("⚙️ AI model")
+    st.subheader("⚙️ AI model (optional)")
+    st.caption("Only needed for the plain-English option. Samples and the "
+               "build-your-team form are free and need no key.")
     provider = st.selectbox("Provider", list(llm.PROVIDERS.keys()))
     cfg = llm.PROVIDERS[provider]
     model = st.text_input("Model", value=cfg["default_model"])
@@ -49,9 +51,9 @@ with st.sidebar:
                    "(`ollama serve`).")
 
     st.divider()
-    st.caption("How it works: one agent applies several skills in a single pass — "
-               "structure, charter, ownership, issues. The RACI + coach verdict is "
-               "deterministic, so the agent never invents a finding.")
+    st.caption("How it works: the health check (RACI + EOS coach) is pure "
+               "deterministic logic — free, no key, can't hallucinate. The AI "
+               "option only turns a paragraph into structure, using your own key.")
 
 
 def _need_key_missing() -> bool:
@@ -60,6 +62,13 @@ def _need_key_missing() -> bool:
 
 def _has_content(ws) -> bool:
     return bool(ws) and any(ws.get(k) for k in ("charter", "diagnosis", "issues"))
+
+
+def run_spec(spec: dict) -> None:
+    """Run a structured spec through the deterministic engine — no AI, no key."""
+    ws, skills = doctor.build_workspace(spec)
+    st.session_state.workspace = ws
+    st.session_state.skills = skills
 
 
 def run_intake(user_text: str) -> None:
@@ -148,52 +157,110 @@ def render_workspace(ws: dict) -> None:
                "for a polished PDF.")
 
 
-# ── input: describe your own team (primary action) ────────────────────────────
+# ── input modes: two are free & key-less; AI is optional (bring your own key) ──
 if not _has_content(st.session_state.workspace):
-    st.markdown("#### Describe your team")
-    desc = st.text_area(
-        "Describe your team", height=150, label_visibility="collapsed",
-        placeholder="Paste or type a description in plain English — for example:\n\n"
-        "“We're a 6-person startup. Our founder does sales, product, and support. "
-        "Two engineers wait to be told what to do. Nobody owns finance. We argue "
-        "about decisions for weeks and never write anything down.”")
-    up = st.file_uploader("…or upload a description (PDF, Word, .txt, .md)",
-                          type=["pdf", "docx", "doc", "txt", "md"])
-    d1, d2 = st.columns([1, 2])
-    if d1.button("🩺 Diagnose my team", type="primary", use_container_width=True):
-        text = desc.strip()
-        if not text and up is not None:
-            try:
-                text = ingest.extract_text(up).strip()
-            except Exception as e:
-                text = ""
-                st.warning(f"Couldn't read that file: {e}. Try a PDF with selectable "
-                           "text or a .docx, or paste the description.")
-            if text and len(text) < ingest.MIN_USABLE:
-                st.warning("Couldn't extract readable text — the file may be a "
-                           "scanned PDF or a legacy .doc. Try a text-based PDF, a "
-                           ".docx, or paste the description directly.")
-                text = ""
-        if not text:
-            st.warning("Type or paste a description first (or pick a sample below).")
-        elif _need_key_missing():
-            st.warning("Add an API key in the sidebar first, or switch to Ollama.")
-        else:
-            with st.spinner("The agent is building your operating system…"):
-                run_intake(text)
+    mode = st.radio(
+        "How do you want to start?",
+        ["✨ Try a sample (free, no key)",
+         "✍️ Build your team (free, no key)",
+         "💬 Describe in plain English (uses your own AI key)"],
+        index=0)
+
+    # — Free path 1: pre-built sample teams, deterministic, no AI —
+    if mode.startswith("✨"):
+        s1, s2 = st.columns([3, 1])
+        sample_name = s1.selectbox("Sample case study",
+                                   list(doctor.SAMPLE_SPECS.keys()),
+                                   label_visibility="collapsed")
+        if s2.button("Run sample", type="primary", use_container_width=True):
+            run_spec(doctor.SAMPLE_SPECS[sample_name])
             st.rerun()
 
-    st.markdown("###### — or try a sample case study —")
-    s1, s2 = st.columns([3, 1])
-    sample_name = s1.selectbox("Sample case study", list(doctor.SAMPLES.keys()),
-                               label_visibility="collapsed")
-    if s2.button("✨ Run sample", use_container_width=True):
-        if _need_key_missing():
-            st.warning("Add an API key in the sidebar first, or switch to Ollama.")
-        else:
-            with st.spinner("The agent is building this team's operating system…"):
-                run_intake(doctor.SAMPLES[sample_name])
-            st.rerun()
+    # — Free path 2: structured form, deterministic, no AI —
+    elif mode.startswith("✍️"):
+        st.caption("Add your people and the areas of work, then mark who owns what. "
+                   "No AI, no key — the health check runs on rules.")
+        team_name = st.text_input("Team name", placeholder="e.g. Acme, Robotics Club")
+        mission = st.text_input("Mission (optional)",
+                                placeholder="one line — what the team is here to do")
+        c_m, c_w = st.columns(2)
+        with c_m:
+            st.markdown("**Members**")
+            members_rows = st.data_editor(
+                [{"name": "", "role": ""}], num_rows="dynamic", key="m_ed",
+                use_container_width=True, hide_index=True)
+        with c_w:
+            st.markdown("**Areas of work (workstreams)**")
+            ws_rows = st.data_editor(
+                [{"workstream": ""}], num_rows="dynamic", key="w_ed",
+                use_container_width=True, hide_index=True)
+
+        member_names = [str(r.get("name", "")).strip() for r in members_rows
+                        if str(r.get("name", "")).strip()]
+        ws_names = [str(r.get("workstream", "")).strip() for r in ws_rows
+                    if str(r.get("workstream", "")).strip()]
+
+        raci_rows = []
+        if member_names and ws_names:
+            st.markdown("**Who owns what?** (Accountable = owns it; Responsible = does it)")
+            for w in ws_names:
+                a_col, r_col = st.columns([2, 3])
+                a = a_col.selectbox(f"Accountable · {w}", ["— none —"] + member_names,
+                                    key=f"a_{w}")
+                rs = r_col.multiselect(f"Responsible · {w}", member_names, key=f"r_{w}")
+                if a != "— none —":
+                    raci_rows.append({"workstream": w, "member": a, "code": "A"})
+                for r in rs:
+                    raci_rows.append({"workstream": w, "member": r, "code": "R"})
+
+        if st.button("🩺 Run diagnosis", type="primary"):
+            if not member_names or not ws_names:
+                st.warning("Add at least one member and one area of work.")
+            else:
+                run_spec({
+                    "team_name": team_name or "Your team", "mission": mission,
+                    "summary": "", "charter": None, "issues": None,
+                    "members": [{"name": n} for n in member_names],
+                    "workstreams": [{"name": w} for w in ws_names],
+                    "raci": raci_rows})
+                st.rerun()
+        st.caption("Want a drafted charter + an issues list too? Use the "
+                   "plain-English option with your own free AI key.")
+
+    # — Optional AI path: bring your own key —
+    else:
+        st.info("This option uses an AI model to read your description. Pick a "
+                "provider and paste **your own** free key in the sidebar "
+                "(e.g. Google Gemini — free at aistudio.google.com/apikey). "
+                "Your key, your free quota — never the owner's.")
+        desc = st.text_area(
+            "Describe your team", height=140, label_visibility="collapsed",
+            placeholder="“We're a 6-person startup. Our founder does sales, product, "
+            "and support. Two engineers wait to be told what to do. Nobody owns "
+            "finance. We argue about decisions and never write them down.”")
+        up = st.file_uploader("…or upload a description (PDF, Word, .txt, .md)",
+                              type=["pdf", "docx", "doc", "txt", "md"])
+        if st.button("🩺 Diagnose with AI", type="primary"):
+            text = desc.strip()
+            if not text and up is not None:
+                try:
+                    text = ingest.extract_text(up).strip()
+                except Exception as e:
+                    text = ""
+                    st.warning(f"Couldn't read that file: {e}. Try a text PDF or .docx.")
+                if text and len(text) < ingest.MIN_USABLE:
+                    st.warning("Couldn't extract readable text — try a text-based "
+                               "PDF, a .docx, or paste the description.")
+                    text = ""
+            if not text:
+                st.warning("Type or paste a description, or upload a file.")
+            elif _need_key_missing():
+                st.warning("Paste your own API key in the sidebar first "
+                           "(or pick Ollama if running locally).")
+            else:
+                with st.spinner("The agent is reading your team…"):
+                    run_intake(text)
+                st.rerun()
 else:
     if st.button("🔄 Start over / diagnose another team"):
         st.session_state.messages = []
@@ -201,46 +268,39 @@ else:
         st.session_state.skills = []
         st.rerun()
 
-# ── two-pane layout: conversation + diagnosis ─────────────────────────────────
-left, right = st.columns(2)
-
-with left:
-    st.markdown("#### Conversation")
-    if not st.session_state.messages:
-        st.info("Describe your team below — for example: *“We're 4 people. Alex "
-                "does almost everything, two people haven't shipped, and we never "
-                "write down decisions.”*")
-    for m in st.session_state.messages:
-        with st.chat_message(m["role"]):
-            st.markdown(m["content"])
+# ── display the result ────────────────────────────────────────────────────────
+if _has_content(st.session_state.workspace):
+    if st.session_state.messages:
+        left, right = st.columns(2)
+        with left:
+            st.markdown("#### Conversation")
+            for m in st.session_state.messages:
+                with st.chat_message(m["role"]):
+                    st.markdown(m["content"])
+        with right:
+            st.markdown("#### Your operating system")
+            render_workspace(st.session_state.workspace)
+    else:
+        st.markdown("#### Your operating system")
+        render_workspace(st.session_state.workspace)
 
     if st.session_state.skills:
-        with st.expander(f"🧠 Skills the agent used ({len(st.session_state.skills)})",
-                         expanded=True):
+        with st.expander(f"🧩 What's in this report ({len(st.session_state.skills)})"):
             for s in st.session_state.skills:
                 st.markdown(f"- {s}")
 
-with right:
-    st.markdown("#### Your operating system")
-    if _has_content(st.session_state.workspace):
-        render_workspace(st.session_state.workspace)
-    else:
-        st.info("Your charter, ownership check, and issues will appear here once "
-                "you describe your team.")
-
-# ── chat input (always pinned to the bottom) ──────────────────────────────────
-_chat_ph = ("Ask a follow-up question about the diagnosis…"
-            if _has_content(st.session_state.workspace)
-            else "Or describe your team right here…")
-prompt = st.chat_input(_chat_ph)
-if prompt:
-    if _need_key_missing():
-        st.warning("Add an API key in the sidebar first, or switch to Ollama.")
-    else:
-        with st.spinner("Thinking…"):
-            run_intake(prompt)
-        st.rerun()
+    # Follow-up chat only applies to the AI path (and uses the visitor's own key).
+    if st.session_state.messages:
+        prompt = st.chat_input("Ask a follow-up question about the diagnosis…")
+        if prompt:
+            if _need_key_missing():
+                st.warning("Paste your own API key in the sidebar to ask follow-ups.")
+            else:
+                with st.spinner("Thinking…"):
+                    run_intake(prompt)
+                st.rerun()
 
 st.divider()
 st.caption("© 2026 Feifei Li. All rights reserved. Team Doctor is proprietary "
-           "software. AI structures your description; the diagnosis is deterministic.")
+           "software. The diagnosis is deterministic and free; AI (optional) only "
+           "reads your description, using your own key.")

@@ -63,6 +63,104 @@ SAMPLES: dict = {
 # Default sample (first one) kept for backward compatibility.
 SAMPLE_TEAM = next(iter(SAMPLES.values()))
 
+# Pre-structured sample teams that run through the DETERMINISTIC engine with NO
+# AI call and NO API key — used for the free, key-less paths (samples + booth).
+SAMPLE_SPECS: dict = {
+    "Series A startup (people burning out)": {
+        "team_name": "Vectorly", "mission": "B2B analytics that ships weekly",
+        "summary": "CTO overloaded, sales ownership split, nobody owns finance",
+        "members": [{"name": "Priya", "role": "CEO"}, {"name": "Tom", "role": "CTO"},
+                    {"name": "Jade", "role": "Eng"}, {"name": "Marco", "role": "Eng"},
+                    {"name": "Lena", "role": "Product"}, {"name": "Sven", "role": "Sales"},
+                    {"name": "Ivy", "role": "Marketing"}, {"name": "Ben", "role": "CS"}],
+        "workstreams": [{"name": "Platform"}, {"name": "Infra"}, {"name": "Product"},
+                        {"name": "Hiring"}, {"name": "Sales"}, {"name": "Marketing"},
+                        {"name": "Customer success"}, {"name": "Finance"}],
+        "raci": [
+            {"workstream": "Platform", "member": "Tom", "code": "A"},
+            {"workstream": "Platform", "member": "Jade", "code": "R"},
+            {"workstream": "Infra", "member": "Tom", "code": "A"},
+            {"workstream": "Infra", "member": "Marco", "code": "R"},
+            {"workstream": "Product", "member": "Tom", "code": "A"},
+            {"workstream": "Product", "member": "Lena", "code": "R"},
+            {"workstream": "Hiring", "member": "Tom", "code": "A"},
+            {"workstream": "Sales", "member": "Sven", "code": "A"},
+            {"workstream": "Sales", "member": "Priya", "code": "A"},
+            {"workstream": "Marketing", "member": "Ivy", "code": "A"},
+            {"workstream": "Customer success", "member": "Ben", "code": "A"}],
+        "charter": {
+            "mission": "Help analysts get answers in seconds.",
+            "values": ["Ship weekly", "Own your area", "Customer truth"],
+            "decision_rule": "The accountable owner decides after a 10-minute debate.",
+            "communication_rule": "Async by default; one weekly sync.",
+            "credit_rule": "Each person presents the part they led."},
+        "issues": [
+            {"issue": "Tom is a single point of failure", "suggested_owner": "Tom",
+             "next_step": "Hand infra to Marco and hiring to Priya with a checklist"},
+            {"issue": "Sales ownership is split between Priya and Sven", "suggested_owner": "Priya",
+             "next_step": "Make Sven solely accountable for the sales number"},
+            {"issue": "Nobody owns finance — almost missed payroll", "suggested_owner": "Ben",
+             "next_step": "Assign finance ownership this week"}],
+    },
+    "Nonprofit board (co-chairs, slow decisions)": {
+        "team_name": "Riverside Arts", "mission": "Fund community art programs",
+        "summary": "Two co-chairs jointly own everything; treasurer sidelined",
+        "members": [{"name": "Dana", "role": "Co-chair"}, {"name": "Paul", "role": "Co-chair"},
+                    {"name": "Ana", "role": "Treasurer"}, {"name": "Kim", "role": "Volunteer lead"}],
+        "workstreams": [{"name": "Fundraising"}, {"name": "Events"},
+                        {"name": "Grants"}, {"name": "Volunteers"}],
+        "raci": [
+            {"workstream": "Fundraising", "member": "Dana", "code": "A"},
+            {"workstream": "Fundraising", "member": "Paul", "code": "A"},
+            {"workstream": "Events", "member": "Dana", "code": "A"},
+            {"workstream": "Events", "member": "Paul", "code": "A"},
+            {"workstream": "Grants", "member": "Dana", "code": "A"},
+            {"workstream": "Grants", "member": "Paul", "code": "A"},
+            {"workstream": "Volunteers", "member": "Kim", "code": "A"},
+            {"workstream": "Volunteers", "member": "Kim", "code": "R"}],
+        "charter": {
+            "mission": "Bring more art to the community, sustainably.",
+            "values": ["Transparency", "Shared load", "Decide and move"],
+            "decision_rule": "One named owner per area decides; co-chairs break ties only.",
+            "communication_rule": "Monthly board meeting + a shared decisions doc.",
+            "credit_rule": "Recognize volunteers publicly at each event."},
+        "issues": [
+            {"issue": "Every decision needs both co-chairs, so things stall", "suggested_owner": "Dana",
+             "next_step": "Split areas: give each co-chair sole ownership of specific functions"},
+            {"issue": "Treasurer Ana is barely involved", "suggested_owner": "Ana",
+             "next_step": "Give Ana ownership of a finance/grants workstream"},
+            {"issue": "Kim is overloaded across volunteers, events, outreach", "suggested_owner": "Kim",
+             "next_step": "Delegate outreach to a new volunteer owner"}],
+    },
+    "University club (volunteers, churn)": {
+        "team_name": "Robotics Club", "mission": "Build competitive robots and grow members",
+        "summary": "President does everything; officers undefined; members drift; knowledge lost",
+        "members": [{"name": "Alex", "role": "President"}, {"name": "Sam", "role": "VP"},
+                    {"name": "Riley", "role": "Treasurer"}, {"name": "Jordan", "role": "Member"},
+                    {"name": "Casey", "role": "Member"}],
+        "workstreams": [{"name": "Recruiting"}, {"name": "Sponsorships"},
+                        {"name": "Build planning"}, {"name": "Meetings"}, {"name": "Knowledge"}],
+        "raci": [
+            {"workstream": "Recruiting", "member": "Alex", "code": "A"},
+            {"workstream": "Sponsorships", "member": "Alex", "code": "A"},
+            {"workstream": "Build planning", "member": "Alex", "code": "A"},
+            {"workstream": "Meetings", "member": "Alex", "code": "A"}],
+        "charter": {
+            "mission": "Design and build competitive robots while teaching new members.",
+            "values": ["Share responsibility", "Decide together", "Document everything"],
+            "decision_rule": "Design choices: majority vote after a one-week limit; lead breaks ties.",
+            "communication_rule": "Weekly meeting + a shared drive updated within 48 hours.",
+            "credit_rule": "Everyone who works on a build is named on the project page."},
+        "issues": [
+            {"issue": "Alex owns everything and burns out yearly", "suggested_owner": "Alex",
+             "next_step": "Delegate recruiting to Sam and sponsorships to Riley"},
+            {"issue": "Officer roles are undefined", "suggested_owner": "Alex",
+             "next_step": "Write a one-page role description for VP and Treasurer"},
+            {"issue": "Knowledge is lost when seniors graduate", "suggested_owner": "Casey",
+             "next_step": "Set up a shared drive with build/meeting templates"}],
+    },
+}
+
 EXTRACT_SYSTEM = """You are the intake step of a team-health tool. Turn the \
 user's description of their team into structured data. Reply with ONE JSON \
 object and nothing else.
