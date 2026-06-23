@@ -241,19 +241,37 @@ if not _has_content(st.session_state.workspace):
                 })
         with c_w:
             st.markdown("**Areas of work**")
-            st.caption("The main jobs your team is responsible for — one per row. "
-                       "Examples:\n\n"
-                       "• **Startup:** Product · Sales · Marketing · Finance · Support\n\n"
-                       "• **Club:** Recruiting · Events · Fundraising · Social media\n\n"
-                       "• **Café:** Kitchen · Front of house · Marketing · Finance")
+            st.caption("An *area of work* is a standing job the team is responsible "
+                       "for — something that needs an owner even when no one's "
+                       "actively working on it. Think **ongoing responsibilities, "
+                       "not tasks or job titles.** One area per row, 1–3 words each.")
+            with st.expander("ℹ️ How to pick good areas of work"):
+                st.markdown(
+                    "**The test:** if you can ask *“who owns this?”* and it should "
+                    "have one clear answer, it's an area of work.\n\n"
+                    "**Keep them:**\n"
+                    "- **Ongoing**, not one-off — *Fundraising*, not *“book the venue”*\n"
+                    "- **A function**, not a person — *Finance*, not *“Sam”*\n"
+                    "- **Split when one person quietly does several** — if your "
+                    "president runs recruiting, sponsors, builds, AND meetings, "
+                    "that's **four** areas, not one. Splitting them is what makes "
+                    "an overloaded owner show up in the diagnosis.\n\n"
+                    "**Examples by team type:**\n"
+                    "- **Startup:** Product · Sales · Marketing · Finance · Support · Hiring\n"
+                    "- **Club:** Recruiting · Events · Fundraising · Social media · Sponsorships\n"
+                    "- **Café:** Kitchen · Front of house · Ordering & supplies · Marketing · Finance\n"
+                    "- **Nonprofit:** Programs · Grants · Volunteers · Outreach · Finance\n\n"
+                    "Aim for roughly **4–8 areas** — enough to cover the real work, "
+                    "few enough that each can have one owner.")
             ws_rows = st.data_editor(
                 [{"workstream": ""}], num_rows="dynamic", key="w_ed",
                 use_container_width=True, hide_index=True,
                 column_config={
                     "workstream": st.column_config.TextColumn(
                         "Area of work",
-                        help="A job the team owns — e.g. Sales, Product, Finance, "
-                             "Marketing, Operations"),
+                        help="A standing job the team owns — e.g. Sales, Product, "
+                             "Finance, Marketing, Recruiting, Operations. A function, "
+                             "not a one-off task or a person's name."),
                 })
 
         member_names = _clean_rows(members_rows, "name")
