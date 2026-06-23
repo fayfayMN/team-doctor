@@ -338,7 +338,7 @@ def diagnose(spec: dict) -> dict:
     raci_result = raci_check.check(raci, workstreams, members)
     raci_errors = sum(1 for f in raci_result["findings"] if f["level"] == "error")
 
-    coach = health.coach({
+    state = {
         "has_charter": bool(spec.get("mission")),
         "has_workstreams": bool(workstreams),
         "raci_errors": raci_errors,
@@ -348,7 +348,9 @@ def diagnose(spec: dict) -> dict:
         "has_rocks": False,
         "has_scorecard": False,
         "has_issues_resolved": False,
-    })
+    }
+    coach = health.coach(state)
+    roadmap = health.roadmap(state)
 
     return {
         "members": members,
@@ -356,6 +358,7 @@ def diagnose(spec: dict) -> dict:
         "raci": raci,
         "raci_result": raci_result,
         "coach": coach,
+        "roadmap": roadmap,
         "team_name": (spec.get("team_name") or "Your team").strip(),
         "mission": spec.get("mission", ""),
         "summary": spec.get("summary", ""),
@@ -627,6 +630,25 @@ def report_html(ws: dict) -> str:
             s.append(f"<p><strong>{_esc(primary['title'])}</strong></p>")
             s.append(f"<p><em>Why:</em> {_esc(primary['why'])}</p>")
             s.append(f"<p><em>Do this:</em> {_esc(primary['practice'])}</p>")
+
+        rm = diag.get("roadmap")
+        if rm:
+            s.append("<h2>📈 The full roadmap</h2>")
+            s.append("<p class='sub'>Your “start here” is the single most important "
+                     "move. This is the whole path it sits on — do them in order. "
+                     "✅ done · 🎯 you're here · ⬜ coming up.</p>")
+            badge_rm = {"done": "✅", "now": "🎯", "next": "⬜"}
+            for stage in rm:
+                icon = badge_rm.get(stage["status"], "⬜")
+                here = " — <strong>you're here</strong>" if stage["status"] == "now" else ""
+                s.append(f"<h3 style='margin:18px 0 4px'>{icon} "
+                         f"{_esc(stage['title'])}{here}</h3>")
+                s.append(f"<p style='margin:2px 0'><em>{_esc(stage['what'])}</em></p>")
+                s.append(f"<p style='margin:2px 0'><strong>Why it matters:</strong> "
+                         f"{_esc(stage['why'])}</p>")
+                s.append("<ul style='margin:4px 0'>"
+                         + "".join(f"<li>{_esc(step)}</li>" for step in stage["steps"])
+                         + "</ul>")
 
     if issues:
         s.append("<h2>🔟 Issues to work (IDS)</h2>")

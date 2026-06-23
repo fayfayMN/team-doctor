@@ -143,6 +143,24 @@ def render_diagnosis(diag: dict) -> None:
         with st.expander("Other things to watch"):
             for a in also:
                 st.markdown(f"- {a}")
+
+    roadmap = diag.get("roadmap")
+    if roadmap:
+        with st.expander("📈 Want to go further? The full roadmap, step by step"):
+            st.caption("Your “start here” above is the single most important move. "
+                       "This is the whole path it sits on — do them in order. "
+                       "✅ done · 🎯 you're here · ⬜ coming up.")
+            badge = {"done": "✅", "now": "🎯", "next": "⬜"}
+            for stage in roadmap:
+                icon = badge.get(stage["status"], "⬜")
+                here = " — **you're here**" if stage["status"] == "now" else ""
+                st.markdown(f"#### {icon} {stage['title']}{here}")
+                st.markdown(f"*{stage['what']}*")
+                st.markdown(f"**Why it matters:** {stage['why']}")
+                st.markdown("**How to do it:**")
+                for step in stage["steps"]:
+                    st.markdown(f"- {step}")
+                st.markdown("")
     st.caption(f"Maturity stage: **{diag['coach'].get('maturity', '—')}**  ·  "
                "Every flag here is a traceable rule — not AI guesswork.")
     with st.expander("ℹ️ What do “RACI” and “EOS” mean?"):

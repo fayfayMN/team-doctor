@@ -181,3 +181,109 @@ def coach(state: Dict) -> Dict:
         f"All dimensions are at or above neutral (overall {pulse['overall']}/5).",
         "Maintain the weekly rhythm and re-pulse each cycle.",
         "ok"), "also": also, "maturity": "Healthy"}
+
+
+# ── The full roadmap — for visitors who want to go deeper than the one next step ─
+# A sequenced EOS-style path. The coach above always names the single most
+# important move; this lays out the whole ladder so a motivated team can see
+# what comes after it. Each stage carries detailed, plain-language steps. Still
+# 100% deterministic — every stage's "done?" is a transparent rule over state.
+ROADMAP: List[Dict] = [
+    {"key": "charter", "title": "1. Write a one-page charter (EOS calls this the Vision)",
+     "done": lambda s: bool(s.get("has_charter")),
+     "what": "A single page everyone agrees on: why the team exists and how it works.",
+     "why": "Without a shared agreement, every later decision quietly drifts and "
+            "people fill the gaps with different assumptions.",
+     "steps": [
+         "Mission in one sentence — what this team is here to do.",
+         "Three to five values or ground rules you'll actually hold each other to.",
+         "Your decision rule: when you disagree, how does a decision get made?",
+         "Your credit rule: how does recognition follow the work?",
+         "Put it where everyone can see it, and have each person say yes out loud."]},
+    {"key": "raci", "title": "2. Give every area one clear owner (EOS Accountability Chart)",
+     "done": lambda s: bool(s.get("has_workstreams")) and s.get("raci_errors", 0) == 0,
+     "what": "A one-page map: each area of work has exactly one Accountable owner "
+             "and at least one person doing it.",
+     "why": "Shared or missing ownership is the #1 source of free-riders, dropped "
+            "balls, and blame. One name per area ends 'I thought you had it.'",
+     "steps": [
+         "List every area of work the team owns.",
+         "For each, name ONE Accountable owner — the person who answers for it.",
+         "Name who's Responsible (does the hands-on work); it can be the same person.",
+         "Fix the red flags first: unowned areas, two owners, or one person owning "
+         "too much.",
+         "Re-run this check until the structure score is 100%."]},
+    {"key": "weekly", "title": "3. Run a 60-minute weekly meeting (EOS Level 10 + IDS)",
+     "done": lambda s: s.get("decisions_count", 0) > 0 or s.get("has_issues_resolved"),
+     "what": "Same day, same time each week. You work a list of issues and decide "
+             "each one — then write the decision down.",
+     "why": "Issues that don't have a standing time to get solved pile up, and "
+            "undocumented decisions get silently re-litigated.",
+     "steps": [
+         "Keep a running list of issues anyone can add to during the week.",
+         "Each week, pick the most important issues and run IDS on them: "
+         "Identify the real issue, Discuss it briefly, then Solve it.",
+         "Every solve ends with a clear decision AND one owner.",
+         "Write the decision in a shared log so no one re-opens it later.",
+         "Protect the time — same slot every week, no skipping."]},
+    {"key": "rocks", "title": "4. Set 3–7 quarterly priorities (EOS Rocks)",
+     "done": lambda s: bool(s.get("has_rocks")),
+     "what": "A short list of the few things that must get done this quarter — "
+             "each with one owner and a yes/no 'done' definition.",
+     "why": "Without a few named priorities, everything feels urgent and the "
+            "important-but-not-loud work never happens.",
+     "steps": [
+         "As a team, pick the 3–7 outcomes that matter most for the next 90 days.",
+         "Give each Rock a single owner and a clear 'done looks like…' line.",
+         "Review Rock status at the top of the weekly meeting (on track / off track).",
+         "Anything off-track becomes an issue to IDS that week.",
+         "At quarter end, score them honestly and set the next set."]},
+    {"key": "scorecard", "title": "5. Track 5–15 weekly numbers (EOS Scorecard)",
+     "done": lambda s: bool(s.get("has_scorecard")),
+     "what": "A handful of numbers, each owned by one person, reviewed weekly — "
+             "so you see reality before it becomes a crisis.",
+     "why": "Opinions argue; numbers settle. A weekly pulse of real metrics catches "
+            "problems while they're still small.",
+     "steps": [
+         "Pick 5–15 numbers that tell you the team is healthy (leads, output, "
+         "cash, response time — whatever matters here).",
+         "Give each number one owner who reports it weekly.",
+         "Set an expected range for each so 'off' is obvious at a glance.",
+         "Glance at the scorecard at the start of every weekly meeting.",
+         "Any number out of range becomes an issue to solve."]},
+    {"key": "pulse", "title": "6. Take an honest read on how the team feels (anonymous pulse)",
+     "done": lambda s: bool(s.get("pulse")),
+     "what": "A short, anonymous survey on safety, clarity, workload, and trust — "
+             "results stay hidden until enough people respond.",
+     "why": "Structure can look perfect on paper while people quietly burn out or "
+            "stop speaking up. The pulse surfaces what the org chart can't.",
+     "steps": [
+         "Send a short anonymous health check to everyone on the team.",
+         "Wait for at least three responses so no one can be singled out.",
+         "Look at the lowest-scoring dimension first — that's your next conversation.",
+         "Make ONE visible change people asked for, and say you did it.",
+         "Re-pulse each cycle to see whether it actually moved."]},
+]
+
+
+def roadmap(state: Dict) -> List[Dict]:
+    """Return the full path with each stage marked done / 'now' / 'next'.
+
+    Deterministic: 'done' is a rule over state; the first not-done stage is where
+    the team is now. Lets a motivated visitor see the whole journey, not just the
+    single next step the coach highlights.
+    """
+    out: List[Dict] = []
+    first_open = True
+    for stage in ROADMAP:
+        is_done = bool(stage["done"](state))
+        if is_done:
+            status = "done"
+        elif first_open:
+            status, first_open = "now", False
+        else:
+            status = "next"
+        out.append({
+            "key": stage["key"], "title": stage["title"], "status": status,
+            "what": stage["what"], "why": stage["why"], "steps": stage["steps"]})
+    return out
