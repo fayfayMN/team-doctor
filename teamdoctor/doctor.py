@@ -324,13 +324,16 @@ def diagnose(spec: dict) -> dict:
                 return _id
         return None
 
-    raci: Dict[str, Dict[str, str]] = {w.id: {} for w in workstreams}
+    # Each cell holds a SET of codes: the same person can be both Accountable
+    # AND Responsible on one workstream (the natural case for a one-person task),
+    # so a single code per cell would let "R" overwrite "A" and drop the owner.
+    raci: Dict[str, Dict[str, set]] = {w.id: {} for w in workstreams}
     for row in spec.get("raci", []):
         wid = _match(row.get("workstream"), ws_id)
         mid = _match(row.get("member"), member_id)
         code = _clean(row.get("code")).upper()
         if wid and mid and code in ("A", "R", "C", "I"):
-            raci.setdefault(wid, {})[mid] = code
+            raci.setdefault(wid, {}).setdefault(mid, set()).add(code)
 
     raci_result = raci_check.check(raci, workstreams, members)
     raci_errors = sum(1 for f in raci_result["findings"] if f["level"] == "error")

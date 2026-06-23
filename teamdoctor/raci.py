@@ -4,8 +4,9 @@ A RACI matrix is only useful if someone checks it for the failure patterns that
 quietly break teams. These rules encode the well-known ones so the app can say
 *exactly* what's wrong and why.
 
-The matrix is stored as ``raci[workstream_id][member_id] = code`` where code is
-one of the RACI_CODES keys ("A","R","C","I","").
+The matrix is stored as ``raci[workstream_id][member_id] = {codes}`` where each
+cell is a SET of RACI_CODES keys ("A","R","C","I"). A set (not a single code)
+because one person can be both Accountable and Responsible on the same workstream.
 """
 
 from __future__ import annotations
@@ -16,8 +17,17 @@ from typing import Dict, List
 OVERLOAD_THRESHOLD = 3
 
 
-def _assignments_for(raci: Dict, workstream_id: str) -> Dict[str, str]:
-    return {m: c for m, c in raci.get(workstream_id, {}).items() if c}
+def _assignments_for(raci: Dict, workstream_id: str) -> Dict[str, set]:
+    """Return {member_id: set_of_codes} for a workstream, dropping empty cells.
+
+    Tolerates a legacy single-code string per cell by wrapping it in a set."""
+    out: Dict[str, set] = {}
+    for m, codes in raci.get(workstream_id, {}).items():
+        s = {codes} if isinstance(codes, str) else set(codes or ())
+        s.discard("")
+        if s:
+            out[m] = s
+    return out
 
 
 def check(raci: Dict, workstreams: List, members: List) -> Dict:
@@ -36,8 +46,8 @@ def check(raci: Dict, workstreams: List, members: List) -> Dict:
 
     # ── Per-workstream structural rules ───────────────────────────────────────
     for w in workstreams:
-        a = [name.get(m, m) for m, c in _assignments_for(raci, w.id).items() if c == "A"]
-        r = [name.get(m, m) for m, c in _assignments_for(raci, w.id).items() if c == "R"]
+        a = [name.get(m, m) for m, cs in _assignments_for(raci, w.id).items() if "A" in cs]
+        r = [name.get(m, m) for m, cs in _assignments_for(raci, w.id).items() if "R" in cs]
 
         if len(a) == 0:
             findings.append({"level": "error",
@@ -58,9 +68,9 @@ def check(raci: Dict, workstreams: List, members: List) -> Dict:
     a_count: Dict[str, int] = {}
     involved: set = set()
     for w in workstreams:
-        for m, c in _assignments_for(raci, w.id).items():
+        for m, cs in _assignments_for(raci, w.id).items():
             involved.add(m)
-            if c == "A":
+            if "A" in cs:
                 a_count[m] = a_count.get(m, 0) + 1
 
     for m, n in a_count.items():
@@ -79,8 +89,8 @@ def check(raci: Dict, workstreams: List, members: List) -> Dict:
     # ── Score: fraction of workstreams with a clean ownership structure ───────
     clean = 0
     for w in workstreams:
-        a = [c for c in _assignments_for(raci, w.id).values() if c == "A"]
-        r = [c for c in _assignments_for(raci, w.id).values() if c == "R"]
+        a = [cs for cs in _assignments_for(raci, w.id).values() if "A" in cs]
+        r = [cs for cs in _assignments_for(raci, w.id).values() if "R" in cs]
         if len(a) == 1 and len(r) >= 1:
             clean += 1
     score = round(clean / len(workstreams), 2)

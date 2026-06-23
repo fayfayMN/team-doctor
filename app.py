@@ -245,26 +245,20 @@ if not _has_content(st.session_state.workspace):
             st.info("Add at least one person and one area of work above — then a "
                     "dropdown appears to set who owns each area.")
         else:
-            # Ownership lives in a form so all picks are captured together on submit,
-            # and the widgets are keyed by POSITION (not the area's text) so editing
-            # an area name can't reset a selection.
-            with st.form("ownership_form"):
-                st.markdown("**Who owns what?** "
-                            "(Accountable = owns it · Responsible = does it)")
-                st.caption("Set an Accountable owner for each area, then click Run. "
-                           "(Consulted/Informed aren't needed — they don't change "
-                           "the diagnosis.)")
-                picks = []
-                for i, w in enumerate(ws_names):
-                    a_col, r_col = st.columns([2, 3])
-                    a = a_col.selectbox(f"Accountable · {w}",
-                                        ["— none —"] + member_names, key=f"a_{i}")
-                    rs = r_col.multiselect(f"Responsible · {w}", member_names,
-                                           key=f"r_{i}")
-                    picks.append((w, a, rs))
-                submitted = st.form_submit_button("🩺 Run diagnosis", type="primary")
-
-            if submitted:
+            st.markdown("**Who owns what?** "
+                        "(Accountable = owns it · Responsible = does it)")
+            st.caption("Set an Accountable owner for each area, then click Run. "
+                       "(Consulted/Informed aren't needed — they don't change "
+                       "the diagnosis.)")
+            picks = []
+            for i, w in enumerate(ws_names):
+                a_col, r_col = st.columns([2, 3])
+                a = a_col.selectbox(f"Accountable · {w}",
+                                    ["— none —"] + member_names, key=f"a_{i}")
+                rs = r_col.multiselect(f"Responsible · {w}", member_names,
+                                       key=f"r_{i}")
+                picks.append((w, a, rs))
+            if st.button("🩺 Run diagnosis", type="primary"):
                 raci_rows = []
                 for w, a, rs in picks:
                     if a != "— none —":
