@@ -225,15 +225,53 @@ if not _has_content(st.session_state.workspace):
     elif mode.startswith("✍️"):
         st.caption("Add your people and the areas of work, then mark who owns what. "
                    "No AI, no key — the health check runs on rules.")
-        team_name = st.text_input("Team name", placeholder="e.g. Acme, Robotics Club")
-        mission = st.text_input("Mission (optional)",
+
+        # One-click example so visitors can see a filled-in team (and a real
+        # diagnosis: a president owning everything + nobody owning finance).
+        # Areas are ordered to match the ownership picks set below by index.
+        EX_PEOPLE = [{"name": "Mia", "role": "President"},
+                     {"name": "Sam", "role": "VP"},
+                     {"name": "Jess", "role": "Treasurer"},
+                     {"name": "Kim", "role": "Member"},
+                     {"name": "Alex", "role": "Member"}]
+        EX_AREAS = [{"workstream": "Events"}, {"workstream": "Recruiting"},
+                    {"workstream": "Sponsorships"}, {"workstream": "Guest speakers"},
+                    {"workstream": "Social media"}, {"workstream": "Finance"}]
+        EX_ACC = ["Mia", "Mia", "Mia", "Mia", "Sam", "— none —"]
+        EX_RES = [["Kim"], ["Sam"], ["Jess"], ["Kim"], ["Alex"], []]
+
+        bcol1, bcol2 = st.columns([1, 1])
+        if bcol1.button("✨ Fill with an example team"):
+            st.session_state["td_example"] = True
+            st.session_state["td_team"] = "Campus AI Club"
+            st.session_state["td_mission"] = "Run great AI events and grow members"
+            for i in range(len(EX_AREAS)):
+                st.session_state[f"a_{i}"] = EX_ACC[i]
+                st.session_state[f"r_{i}"] = EX_RES[i]
+            st.rerun()
+        if st.session_state.get("td_example") and bcol2.button("↩️ Clear the example"):
+            for k in (["td_example", "td_team", "td_mission"]
+                      + [f"a_{i}" for i in range(len(EX_AREAS))]
+                      + [f"r_{i}" for i in range(len(EX_AREAS))]):
+                st.session_state.pop(k, None)
+            st.rerun()
+
+        ex_on = st.session_state.get("td_example", False)
+        # Changing the editor key when the example loads forces it to re-read the
+        # example rows instead of keeping any prior edits.
+        ed_key = "ex" if ex_on else "blank"
+
+        team_name = st.text_input("Team name", key="td_team",
+                                  placeholder="e.g. Acme, Robotics Club")
+        mission = st.text_input("Mission (optional)", key="td_mission",
                                 placeholder="one line — what the team is here to do")
         c_m, c_w = st.columns(2)
         with c_m:
             st.markdown("**People on the team**")
             st.caption("One row per person. Role is optional.")
             members_rows = st.data_editor(
-                [{"name": "", "role": ""}], num_rows="dynamic", key="m_ed",
+                EX_PEOPLE if ex_on else [{"name": "", "role": ""}],
+                num_rows="dynamic", key=f"m_ed_{ed_key}",
                 use_container_width=True, hide_index=True,
                 column_config={
                     "name": st.column_config.TextColumn("Name"),
@@ -264,7 +302,8 @@ if not _has_content(st.session_state.workspace):
                     "Aim for roughly **4–8 areas** — enough to cover the real work, "
                     "few enough that each can have one owner.")
             ws_rows = st.data_editor(
-                [{"workstream": ""}], num_rows="dynamic", key="w_ed",
+                EX_AREAS if ex_on else [{"workstream": ""}],
+                num_rows="dynamic", key=f"w_ed_{ed_key}",
                 use_container_width=True, hide_index=True,
                 column_config={
                     "workstream": st.column_config.TextColumn(
