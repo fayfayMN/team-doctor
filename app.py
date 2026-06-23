@@ -121,13 +121,49 @@ def render_charter(charter: dict) -> None:
             st.markdown(f"**{label}:** {text}")
 
 
+def _raci_table(diag: dict) -> list:
+    """Build the actual ownership table behind the score, so the number is never
+    shown without the content that produced it."""
+    mname = {m.id: m.name for m in diag.get("members", [])}
+    rows = []
+    for w in diag.get("workstreams", []):
+        cell = diag.get("raci", {}).get(w.id, {})
+        a = [mname.get(mid, mid) for mid, cs in cell.items() if "A" in cs]
+        r = [mname.get(mid, mid) for mid, cs in cell.items() if "R" in cs]
+        rows.append({"Area of work": w.name,
+                     "Accountable (owns it)": ", ".join(a) or "— none —",
+                     "Responsible (does it)": ", ".join(r) or "— none —"})
+    return rows
+
+
+def render_continuity(cont: dict) -> None:
+    st.error(f"🚨 {cont['title']}")
+    st.markdown(f"**Why:** {cont['why']}")
+    for step in cont["steps"]:
+        st.markdown(f"- {step}")
+    st.divider()
+
+
 def render_diagnosis(diag: dict) -> None:
     r = diag["raci_result"]
+    # A recent collapse/resignation? Stabilizing comes before anything else.
+    if diag.get("continuity"):
+        render_continuity(diag["continuity"])
+
     st.markdown("### 🧩 Ownership (RACI)")
     if diag.get("summary"):
         st.caption(f"_What you described:_ {diag['summary']}")
     st.metric("RACI structure score", f"{round(r['score'] * 100)}%",
-              help="Share of workstreams with exactly one owner and a doer.")
+              help="Share of areas with exactly one owner and at least one doer. "
+                   "This measures structural completeness only — risks like one "
+                   "person owning too much are flagged separately below.")
+    # Always show the table that produces the score — a number with no content
+    # creates false confidence.
+    table = _raci_table(diag)
+    if table:
+        st.table(table)
+        st.caption("This is the ownership map behind the score. Gaps (— none —) and "
+                   "any one person owning several areas are exactly what to fix.")
     for f in r["findings"]:
         icon = {"error": "🔴", "warn": "🟡", "ok": "🟢"}.get(f["level"], "•")
         st.markdown(f"{icon} {f['msg']}")

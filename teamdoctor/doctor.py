@@ -342,6 +342,7 @@ def diagnose(spec: dict) -> dict:
         "has_charter": bool(spec.get("mission")),
         "has_workstreams": bool(workstreams),
         "raci_errors": raci_errors,
+        "team_size": len(members),
         "decisions_count": 0,
         "responses_count": 0,
         "pulse": None,
@@ -351,6 +352,13 @@ def diagnose(spec: dict) -> dict:
     }
     coach = health.coach(state)
     roadmap = health.roadmap(state)
+    # Crisis check: scan everything the user told us for signs of a recent
+    # departure/collapse; if found, stabilizing comes before the roadmap.
+    crisis_text = " ".join([
+        spec.get("summary", "") or "", spec.get("mission", "") or "",
+        " ".join(i.get("issue", "") for i in (spec.get("issues") or [])),
+    ])
+    continuity = health.continuity(crisis_text)
 
     return {
         "members": members,
@@ -359,6 +367,8 @@ def diagnose(spec: dict) -> dict:
         "raci_result": raci_result,
         "coach": coach,
         "roadmap": roadmap,
+        "continuity": continuity,
+        "team_size": len(members),
         "team_name": (spec.get("team_name") or "Your team").strip(),
         "mission": spec.get("mission", ""),
         "summary": spec.get("summary", ""),
@@ -599,6 +609,17 @@ def report_html(ws: dict) -> str:
     if diag.get("summary"):
         s.append(f"<p><em>What you described:</em> {_esc(diag['summary'])}</p>")
 
+    cont = diag.get("continuity")
+    if cont:
+        s.append("<div style='border:2px solid #A32D2D;background:#FCEBEB;"
+                 "border-radius:8px;padding:12px 16px;margin:14px 0'>")
+        s.append(f"<h2 style='border:none;margin:0 0 6px;color:#A32D2D'>🚨 "
+                 f"{_esc(cont['title'])}</h2>")
+        s.append(f"<p style='margin:2px 0'><strong>Why:</strong> {_esc(cont['why'])}</p>")
+        s.append("<ul style='margin:6px 0'>"
+                 + "".join(f"<li>{_esc(step)}</li>" for step in cont["steps"])
+                 + "</ul></div>")
+
     if charter:
         s.append("<h2>📜 Charter</h2>")
         if charter.get("mission"):
@@ -618,7 +639,28 @@ def report_html(ws: dict) -> str:
         r = diag["raci_result"]
         s.append("<h2>🧩 Ownership (RACI)</h2>")
         s.append(f"<div class='score'>{round(r['score'] * 100)}%"
-                 "<span style='font-size:14px;color:#888'> structure score</span></div>")
+                 "<span style='font-size:14px;color:#888'> structure score "
+                 "(structural completeness only — risks flagged below)</span></div>")
+        # The table behind the score — never show the number without the content.
+        mname = {m.id: m.name for m in diag.get("members", [])}
+        trows = []
+        for w in diag.get("workstreams", []):
+            cell = diag.get("raci", {}).get(w.id, {})
+            a = ", ".join(mname.get(m, m) for m, cs in cell.items() if "A" in cs)
+            rr = ", ".join(mname.get(m, m) for m, cs in cell.items() if "R" in cs)
+            trows.append((w.name, a or "— none —", rr or "— none —"))
+        if trows:
+            s.append("<table style='border-collapse:collapse;width:100%;margin:8px 0;"
+                     "font-size:14px'><thead><tr>"
+                     "<th style='text-align:left;border-bottom:2px solid #ddd;padding:6px'>Area of work</th>"
+                     "<th style='text-align:left;border-bottom:2px solid #ddd;padding:6px'>Accountable (owns it)</th>"
+                     "<th style='text-align:left;border-bottom:2px solid #ddd;padding:6px'>Responsible (does it)</th>"
+                     "</tr></thead><tbody>")
+            for area, a, rr in trows:
+                s.append(f"<tr><td style='border-bottom:1px solid #eee;padding:6px'>{_esc(area)}</td>"
+                         f"<td style='border-bottom:1px solid #eee;padding:6px'>{_esc(a)}</td>"
+                         f"<td style='border-bottom:1px solid #eee;padding:6px'>{_esc(rr)}</td></tr>")
+            s.append("</tbody></table>")
         for f in r["findings"]:
             color, bg, tag = badge.get(f["level"], ("#444", "#f0f0f0", "•"))
             s.append(f"<div class='finding'>"

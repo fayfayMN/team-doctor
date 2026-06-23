@@ -10,6 +10,7 @@ No LLM: every recommendation is a transparent rule with a stated "why".
 
 from __future__ import annotations
 
+import re
 from statistics import mean
 from typing import Dict, List, Optional
 
@@ -20,6 +21,49 @@ MIN_RESPONSES = 3
 # 1..5 Likert. A dimension averaging below this is treated as a problem.
 LOW = 3.0
 SERIOUS = 2.5
+
+# At or below this many people, the full EOS apparatus (quarterly Rocks, a
+# 5–15 metric Scorecard, a formal 60-minute Level 10) is oversized. A tiny team
+# needs a decision log and a light check-in, not OKRs.
+SMALL_TEAM = 4
+
+# Words that signal the team is in crisis / transition, not steady-state. When
+# present, stabilizing comes before any governance roadmap.
+CRISIS_WORDS = (
+    "resign", "stepped down", "step down", "quit", "walked away", "leaving",
+    "leaderless", "collapse", "imploded", "dissolve", "falling apart",
+    "fell apart", "disband", "no president", "without a president",
+)
+
+
+def continuity(text: str) -> Optional[Dict]:
+    """If the situation describes a recent departure/collapse, return an
+    emergency continuity checklist that must come BEFORE any governance work.
+    Deterministic: a keyword trigger over the description, not AI judgment."""
+    t = (text or "").lower()
+    if not any(w in t for w in CRISIS_WORDS):
+        return None
+    return {
+        "title": "Stabilize first — before any roadmap",
+        "why": "Someone in a key role has left or the team is in transition. A few "
+               "things break in the first days if no one handles them — do these "
+               "before designing governance.",
+        "steps": [
+            "Declare an interim structure today — even “co-leads until we regroup.” "
+            "A named stand-in stops the team from stalling.",
+            "Audit account access: who controls email, Discord/Slack, LinkedIn, "
+            "Notion, the website, shared drives, and any registration or payment "
+            "logins? Make sure at least two remaining people can get into each.",
+            "Notify your faculty advisor or sponsor in writing — short and factual.",
+            "Check eligibility rules: many student orgs need a minimum number of "
+            "officers (often four) and current registration to keep funding and room "
+            "booking. Confirm you still qualify and fix gaps before the deadline.",
+            "Pause external posting until the remaining team agrees what goes out "
+            "publicly and who approves it.",
+            "Write down what happened and every decision you make this week, so the "
+            "next person inherits a record, not a mystery.",
+        ],
+    }
 
 QUESTIONS: List[Dict] = [
     {"id": "safety",        "dimension": "Psychological safety",
@@ -69,6 +113,7 @@ def coach(state: Dict) -> Dict:
     """
     pulse = state.get("pulse")
     also: List[str] = []
+    small = state.get("team_size", 99) <= SMALL_TEAM
 
     if not state.get("has_charter"):
         return {"primary": _rec(
@@ -98,6 +143,20 @@ def coach(state: Dict) -> Dict:
             "error"), "also": also, "maturity": "Forming"}
 
     if state.get("decisions_count", 0) == 0:
+        if small:
+            return {"primary": _rec(
+                "Set up a decision log + a light weekly check-in",
+                "Decisions aren't being recorded, so 'we never agreed to that' "
+                "arguments are inevitable — and at your size, a heavy meeting system "
+                "would be overkill.",
+                "Keep it light, right-sized for a small team: (1) start one shared "
+                "“decisions & status” doc — every time you decide something, write one "
+                "line: what, who, when. (2) Agree the rule that's probably missing: "
+                "what needs sign-off from everyone vs. what either of you can just do. "
+                "(3) Do a 15-minute check-in on a set day each week, live or async. "
+                "That's the whole system at your size — skip quarterly planning and "
+                "metrics dashboards until the team is bigger.",
+                "warn"), "also": also, "maturity": "Operating"}
         return {"primary": _rec(
             "Start a weekly issues + decisions rhythm",
             "Decisions aren't being recorded, so 'we never agreed to that' arguments "
@@ -109,10 +168,13 @@ def coach(state: Dict) -> Dict:
             "with a clear decision and one owner. Same day and time every week.",
             "warn"), "also": also, "maturity": "Operating"}
 
-    if not state.get("has_rocks"):
-        also.append("Add 3–7 quarterly Rocks so priorities are binary and owned.")
-    if not state.get("has_scorecard"):
-        also.append("Set up 5–15 scorecard numbers so the team sees reality weekly.")
+    # Rocks and a Scorecard are for teams big enough to need them — don't push
+    # OKR machinery onto a two-person club.
+    if not small:
+        if not state.get("has_rocks"):
+            also.append("Add 3–7 quarterly Rocks so priorities are binary and owned.")
+        if not state.get("has_scorecard"):
+            also.append("Set up 5–15 scorecard numbers so the team sees reality weekly.")
 
     if not state.get("has_issues_resolved"):
         return {"primary": _rec(
@@ -266,16 +328,42 @@ ROADMAP: List[Dict] = [
 ]
 
 
+# For a tiny team, stage 3 is a light check-in (not a formal Level 10) and the
+# Rocks/Scorecard stages are dropped entirely — they're machinery a 2–4 person
+# team doesn't need yet.
+LIGHT_WEEKLY = {
+    "key": "weekly", "title": "3. Keep a decision log + a short weekly check-in",
+    "done": lambda s: s.get("decisions_count", 0) > 0 or s.get("has_issues_resolved"),
+    "what": "One shared doc for decisions and status, plus a 15-minute check-in on a "
+            "set day — live or async.",
+    "why": "At your size this is the entire operating system you need. It stops "
+           "'we never agreed to that' without the overhead of a formal meeting.",
+    "steps": [
+        "Start one “decisions & status” doc everyone can see and edit.",
+        "Every decision gets one line: what was decided, who owns it, when.",
+        "Agree the rule that's usually missing: what needs everyone's sign-off vs. "
+        "what either person can just do.",
+        "Do a 15-minute check-in once a week on a set day.",
+        "Skip quarterly planning and metric dashboards until the team grows."]}
+
+
 def roadmap(state: Dict) -> List[Dict]:
-    """Return the full path with each stage marked done / 'now' / 'next'.
+    """Return the path with each stage marked done / 'now' / 'next'.
 
     Deterministic: 'done' is a rule over state; the first not-done stage is where
-    the team is now. Lets a motivated visitor see the whole journey, not just the
-    single next step the coach highlights.
+    the team is now. Right-sizes for small teams — a tiny club sees a light
+    decision-log step and skips the Rocks/Scorecard machinery.
     """
+    small = state.get("team_size", 99) <= SMALL_TEAM
+    stages = []
+    for stage in ROADMAP:
+        if small and stage["key"] in ("rocks", "scorecard"):
+            continue
+        stages.append(LIGHT_WEEKLY if (small and stage["key"] == "weekly") else stage)
+
     out: List[Dict] = []
     first_open = True
-    for stage in ROADMAP:
+    for n, stage in enumerate(stages, start=1):
         is_done = bool(stage["done"](state))
         if is_done:
             status = "done"
@@ -283,7 +371,9 @@ def roadmap(state: Dict) -> List[Dict]:
             status, first_open = "now", False
         else:
             status = "next"
+        # Renumber the title so dropping stages doesn't leave gaps (1, 2, 3…).
+        title = re.sub(r"^\s*\d+\.\s*", f"{n}. ", stage["title"])
         out.append({
-            "key": stage["key"], "title": stage["title"], "status": status,
+            "key": stage["key"], "title": title, "status": status,
             "what": stage["what"], "why": stage["why"], "steps": stage["steps"]})
     return out
