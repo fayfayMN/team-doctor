@@ -456,8 +456,14 @@ if not _has_content(st.session_state.workspace):
             type=["pdf", "docx", "doc", "txt", "md",
                   "png", "jpg", "jpeg", "webp", "gif"],
             accept_multiple_files=True)
-        st.caption("You can drop several at once. Images are read by your own "
-                   "vision model (Google Gemini or OpenAI).")
+        if cfg.get("supports_vision"):
+            st.caption("You can drop several at once. Images (PNG/JPG) are read by "
+                       f"your selected vision model (**{provider}**).")
+        else:
+            st.caption(f"You can drop several at once. ⚠️ **{provider}** can't read "
+                       "images — for a photo or screenshot, switch the model to "
+                       "**Google Gemini** or **OpenAI** in the sidebar. Text, PDF, "
+                       "and Word work with any model.")
         if st.button("🩺 Diagnose with AI", type="primary"):
             img_mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
                         "webp": "image/webp", "gif": "image/gif"}
