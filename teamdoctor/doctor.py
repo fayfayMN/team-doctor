@@ -294,6 +294,16 @@ def extract(provider: str, model: str, api_key: str,
     return spec
 
 
+# Signals that a named person has left or a named role is unfilled — used to keep
+# resigned/vacant people from counting as live owners (which would inflate the score).
+_DEPART_WORDS = ("resign", "stepped down", "step down", "has left", "have left",
+                 "quit", "departed", "no longer with", "no longer active", "former ")
+_VACANT_WORDS = ("vacant", "unfilled", "not yet filled", "to be filled", "to be hired",
+                 "recruiting", "recruitment", "open role", "open position", "currently open",
+                 "doesn't exist", "does not exist", "no one yet", "being recruited",
+                 "hiring", "to hire", "needs to be filled", "position is open")
+
+
 def diagnose(spec: dict) -> dict:
     """Run the deterministic engine on an extracted spec."""
     junk = {"", "none", "unnamed", "untitled", "n/a", "na", "tbd", "null"}
@@ -301,9 +311,14 @@ def diagnose(spec: dict) -> dict:
     def _clean(v) -> str:
         return (str(v) if v is not None else "").strip()
 
-    members = [Member.create(_clean(m.get("name")), _clean(m.get("role")))
-               for m in spec.get("members", [])
-               if _clean(m.get("name")).lower() not in junk]
+    members, member_status = [], {}
+    for m in spec.get("members", []):
+        nm = _clean(m.get("name"))
+        if nm.lower() in junk:
+            continue
+        obj = Member.create(nm, _clean(m.get("role")))
+        members.append(obj)
+        member_status[obj.id] = (_clean(m.get("status")).lower() or "active")
     workstreams = [Workstream.create(_clean(w.get("name")), _clean(w.get("description")))
                    for w in spec.get("workstreams", [])
                    if _clean(w.get("name")).lower() not in junk]
@@ -335,14 +350,71 @@ def diagnose(spec: dict) -> dict:
         if wid and mid and code in ("A", "R", "C", "I"):
             raci.setdefault(wid, {}).setdefault(mid, set()).add(code)
 
-    raci_result = raci_check.check(raci, workstreams, members)
+    # All the free-text the user/agent gave us — used to detect who has left or
+    # which roles are unfilled, so a resigned/vacant person is never counted as a
+    # live owner (which would inflate the score).
+    full_text = " ".join([
+        spec.get("summary", "") or "", spec.get("mission", "") or "",
+        spec.get("root_cause", "") or "",
+        " ".join(f"{i.get('issue','')} {i.get('next_step','')}"
+                 for i in (spec.get("issues") or [])),
+    ]).lower()
+
+    def _near_token(token: str, words: tuple, window: int = 50) -> bool:
+        tl = token.lower()
+        i = full_text.find(tl)
+        while i != -1:
+            seg = full_text[max(0, i - window): i + len(tl) + window]
+            if any(w in seg for w in words):
+                return True
+            i = full_text.find(tl, i + len(tl))
+        return False
+
+    def _near(name: str, words: tuple, window: int = 50) -> bool:
+        """True if a signal word sits near the name OR its first/last name part,
+        so 'Maria Larson' is still caught when the text just says 'Maria resigned'."""
+        parts = [p for p in name.split() if len(p) >= 3]
+        tokens = [name] + ([parts[0], parts[-1]] if parts else [])
+        return any(_near_token(t, words, window) for t in dict.fromkeys(tokens))
+
+    departed, vacant = set(), set()
+    for m in members:
+        status = member_status.get(m.id, "active")
+        if status in ("resigned", "departed", "left", "former", "gone") or \
+                _near(m.name, _DEPART_WORDS):
+            departed.add(m.id)
+        elif status in ("vacant", "unfilled", "open", "tbd", "empty") or \
+                _near(m.name, _VACANT_WORDS):
+            vacant.add(m.id)
+    inactive = departed | vacant
+    active_members = [m for m in members if m.id not in inactive]
+    name_of = {m.id: m.name for m in members}
+
+    # Record areas whose only Accountable owner has left/is unfilled, so the table
+    # can show "VACANT — was X" instead of a clean assignment.
+    vacancies: Dict[str, dict] = {}
+    for w in workstreams:
+        cell = raci.get(w.id, {})
+        live_a = [mid for mid, cs in cell.items() if "A" in cs and mid not in inactive]
+        gone_a = [mid for mid, cs in cell.items() if "A" in cs and mid in inactive]
+        if not live_a and gone_a:
+            who = gone_a[0]
+            vacancies[w.id] = {
+                "was": name_of.get(who, "someone"),
+                "reason": "resigned" if who in departed else "unfilled role"}
+
+    # Score and findings on the LIVE team only — drop inactive people's assignments
+    # so a vacated area reads as unowned (a real gap), not a complete one.
+    clean_raci = {wid: {mid: cs for mid, cs in cell.items() if mid not in inactive}
+                  for wid, cell in raci.items()}
+    raci_result = raci_check.check(clean_raci, workstreams, active_members)
     raci_errors = sum(1 for f in raci_result["findings"] if f["level"] == "error")
 
     state = {
         "has_charter": bool(spec.get("mission")),
         "has_workstreams": bool(workstreams),
         "raci_errors": raci_errors,
-        "team_size": len(members),
+        "team_size": len(active_members),
         "decisions_count": 0,
         "responses_count": 0,
         "pulse": None,
@@ -354,57 +426,62 @@ def diagnose(spec: dict) -> dict:
     roadmap = health.roadmap(state)
     # Crisis check: scan everything the user told us for signs of a recent
     # departure/collapse; if found, stabilizing comes before the roadmap.
-    crisis_text = " ".join([
-        spec.get("summary", "") or "", spec.get("mission", "") or "",
-        " ".join(i.get("issue", "") for i in (spec.get("issues") or [])),
-    ])
-    continuity = health.continuity(crisis_text)
+    continuity = health.continuity(full_text)
 
     # Proposed owners: a finding that an area has "no owner" isn't actionable on its
-    # own. For each unowned area, suggest the least-loaded member as a starting point
-    # (clearly a suggestion to validate, per the EOS "assign one now, even
-    # temporarily" rule). Keeps the gap visible while making it actionable.
+    # own. For each unowned area (including a vacated one), suggest the least-loaded
+    # ACTIVE member as a starting point (a suggestion to validate, per the EOS "assign
+    # one now, even temporarily" rule). Keeps the gap visible while making it actionable.
     proposed: Dict[str, str] = {}
-    if members:
-        a_load = {m.id: 0 for m in members}
+    if active_members:
+        a_load = {m.id: 0 for m in active_members}
         for w in workstreams:
-            for mid, cs in raci.get(w.id, {}).items():
+            for mid, cs in clean_raci.get(w.id, {}).items():
                 if "A" in cs:
                     a_load[mid] = a_load.get(mid, 0) + 1
         for w in workstreams:
-            cell = raci.get(w.id, {})
+            cell = clean_raci.get(w.id, {})
             if not any("A" in cs for cs in cell.values()):
-                cand = min(members, key=lambda m: a_load.get(m.id, 0))
+                cand = min(active_members, key=lambda m: a_load.get(m.id, 0))
                 proposed[w.id] = cand.name
                 a_load[cand.id] = a_load.get(cand.id, 0) + 1
 
-    # Governance note: a tiny or even-numbered set of decision-makers can deadlock a
-    # majority-vote rule. Flag it deterministically — it's a structural certainty,
-    # not a judgment call.
     structure_notes: List[str] = []
-    n = len(members)
+    # Vacancy notes first — a departed/unfilled owner is a critical gap, not a clean cell.
+    ws_name = {w.id: w.name for w in workstreams}
+    for wid, v in vacancies.items():
+        structure_notes.append(
+            f"⚠️ **{ws_name.get(wid, 'An area')}** is VACANT — {v['was']} "
+            f"({v['reason']}) was its only owner. It is unowned now; reassign it "
+            "immediately (see the suggested owner in the table).")
+
+    # Governance note: a tiny or even-numbered set of decision-makers can deadlock a
+    # majority-vote rule. Flag it deterministically — it's a structural certainty.
+    n = len(active_members)
     if 0 < n <= 3:
         structure_notes.append(
-            f"With only {n} decision-maker{'s' if n != 1 else ''}, a majority-vote "
-            "rule can deadlock (a tie with no resolver). Define a tiebreaker now — a "
-            "designated lead who decides, or your faculty advisor for ties — so a "
+            f"⚖️ With only {n} active decision-maker{'s' if n != 1 else ''}, a "
+            "majority-vote rule can deadlock (a tie with no resolver). Name your "
+            "faculty advisor as the tiebreaker for tied officer votes — so a "
             "disagreement can't stall the team the way it did before.")
     elif n >= 4 and n % 2 == 0:
         structure_notes.append(
-            f"With an even number of voters ({n}), a majority-vote rule can tie. Name "
-            "a tiebreaker so decisions don't stall.")
+            f"⚖️ With an even number of voters ({n}), a majority-vote rule can tie. "
+            "Name your faculty advisor (or a designated lead) as the tiebreaker so "
+            "decisions don't stall.")
 
     return {
-        "members": members,
+        "members": active_members,
         "workstreams": workstreams,
-        "raci": raci,
+        "raci": clean_raci,
         "raci_result": raci_result,
         "proposed_owners": proposed,
+        "vacancies": vacancies,
         "structure_notes": structure_notes,
         "coach": coach,
         "roadmap": roadmap,
         "continuity": continuity,
-        "team_size": len(members),
+        "team_size": len(active_members),
         "team_name": (spec.get("team_name") or "Your team").strip(),
         "mission": spec.get("mission", ""),
         "summary": spec.get("summary", ""),
@@ -754,15 +831,24 @@ def report_html(ws: dict) -> str:
         # The table behind the score — never show the number without the content.
         mname = {m.id: m.name for m in diag.get("members", [])}
         proposed = diag.get("proposed_owners", {})
+        vac = diag.get("vacancies", {})
         trows = []
         for w in diag.get("workstreams", []):
             cell = diag.get("raci", {}).get(w.id, {})
             a = ", ".join(mname.get(m, m) for m, cs in cell.items() if "A" in cs)
             rr = ", ".join(mname.get(m, m) for m, cs in cell.items() if "R" in cs)
+            vacant_row = False
             if not a:
                 sug = proposed.get(w.id)
-                a = f"— none — · suggest: {sug}" if sug else "— none —"
-            trows.append((w.name, a, rr or "— none —"))
+                if w.id in vac:
+                    vacant_row = True
+                    a = f"⚠️ VACANT — was {vac[w.id]['was']}"
+                    a += f" · reassign to {sug}" if sug else " · reassign now"
+                elif sug:
+                    a = f"— none — · suggest: {sug}"
+                else:
+                    a = "— none —"
+            trows.append((w.name, a, rr or "— none —", vacant_row))
         if trows:
             s.append("<table style='border-collapse:collapse;width:100%;margin:8px 0;"
                      "font-size:14px'><thead><tr>"
@@ -770,9 +856,11 @@ def report_html(ws: dict) -> str:
                      "<th style='text-align:left;border-bottom:2px solid #ddd;padding:6px'>Accountable (owns it)</th>"
                      "<th style='text-align:left;border-bottom:2px solid #ddd;padding:6px'>Responsible (does it)</th>"
                      "</tr></thead><tbody>")
-            for area, a, rr in trows:
-                s.append(f"<tr><td style='border-bottom:1px solid #eee;padding:6px'>{_esc(area)}</td>"
-                         f"<td style='border-bottom:1px solid #eee;padding:6px'>{_esc(a)}</td>"
+            for area, a, rr, vacant_row in trows:
+                bg = "background:#FCEBEB;" if vacant_row else ""
+                col = "color:#A32D2D;font-weight:600;" if vacant_row else ""
+                s.append(f"<tr style='{bg}'><td style='border-bottom:1px solid #eee;padding:6px'>{_esc(area)}</td>"
+                         f"<td style='border-bottom:1px solid #eee;padding:6px;{col}'>{_esc(a)}</td>"
                          f"<td style='border-bottom:1px solid #eee;padding:6px'>{_esc(rr)}</td></tr>")
             s.append("</tbody></table>")
         for f in r["findings"]:
@@ -781,7 +869,7 @@ def report_html(ws: dict) -> str:
                      f"<span class='pill' style='color:{color};background:{bg}'>{tag}</span>"
                      f"{_md_bold(f['msg'])}</div>")
         for note in diag.get("structure_notes", []):
-            s.append(f"<div class='finding'>⚖️ {_esc(note)}</div>")
+            s.append(f"<div class='finding'>{_md_bold(note)}</div>")
         primary = diag["coach"].get("primary")
         if primary:
             s.append("<h2>🎯 Start here</h2>")

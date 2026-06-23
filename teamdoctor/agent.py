@@ -37,7 +37,8 @@ snapshot as ONE JSON object and NOTHING else:
      "conflict": boolean,      // do people disagree on what needs approval vs is autonomous?
      "models": [string],       // if so, name each competing view in a few words
      "first_step": string },   // the one thing to align on before anything else
-  "members": [{"name": string, "role": string}],
+  "members": [{"name": string, "role": string,
+               "status": "active"|"resigned"|"vacant"|"advisor"}],
   "workstreams": [{"name": string, "description": string}],
   "raci": [{"workstream": string, "member": string, "code": "A"|"R"|"C"|"I"}],
   "charter": {
@@ -104,10 +105,13 @@ The skills you apply in this single pass:
 - Names: use real names. If the narrator speaks in first person ("I", "we", "you"),
   use their actual name if given, otherwise their role (e.g. "VP") — never the
   literal word "You" as a member or owner.
-- Who counts as a member: list ONLY currently-active people in "members". Do NOT
-  list a faculty advisor / sponsor, or anyone who has resigned or left — name them
-  in the summary or root_cause instead. (This keeps the team-size right, which
-  decides whether lightweight or full advice applies.)
+- Member status: tag every member with "status". Use "resigned" for anyone who has
+  left/quit/stepped down, "vacant" for a role that is unfilled / being recruited /
+  doesn't exist yet (e.g. "Secretary" when no one holds it), "advisor" for a faculty
+  advisor or sponsor, and "active" otherwise. You MAY keep a resigned/vacant person's
+  last-known area ownership in the raci list — the engine will mark those areas as
+  VACANT and exclude them from the health score and the team size. Getting status
+  right is what keeps a departed owner from looking like a clean assignment.
 - Use the team's REAL structure: if the description (or an attached document) already
   names the team's areas of work, roles, or officers, use THOSE names verbatim —
   don't invent generic ones.

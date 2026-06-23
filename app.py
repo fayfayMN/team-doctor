@@ -127,6 +127,7 @@ def _raci_table(diag: dict) -> list:
     owner to make the gap actionable."""
     mname = {m.id: m.name for m in diag.get("members", [])}
     proposed = diag.get("proposed_owners", {})
+    vac = diag.get("vacancies", {})
     rows = []
     for w in diag.get("workstreams", []):
         cell = diag.get("raci", {}).get(w.id, {})
@@ -135,7 +136,13 @@ def _raci_table(diag: dict) -> list:
         acc = ", ".join(a)
         if not acc:
             sug = proposed.get(w.id)
-            acc = f"— none — · suggest: {sug}" if sug else "— none —"
+            if w.id in vac:
+                acc = f"⚠️ VACANT — was {vac[w.id]['was']}"
+                acc += f" · reassign to {sug}" if sug else " · reassign now"
+            elif sug:
+                acc = f"— none — · suggest: {sug}"
+            else:
+                acc = "— none —"
         rows.append({"Area of work": w.name,
                      "Accountable (owns it)": acc,
                      "Responsible (does it)": ", ".join(r) or "— none —"})
@@ -178,7 +185,7 @@ def render_diagnosis(diag: dict) -> None:
         icon = {"error": "🔴", "warn": "🟡", "ok": "🟢"}.get(f["level"], "•")
         st.markdown(f"{icon} {f['msg']}")
     for note in diag.get("structure_notes", []):
-        st.markdown(f"⚖️ {note}")
+        st.markdown(note)
 
     primary = diag["coach"].get("primary")
     if primary:
