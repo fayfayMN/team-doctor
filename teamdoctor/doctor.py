@@ -360,11 +360,47 @@ def diagnose(spec: dict) -> dict:
     ])
     continuity = health.continuity(crisis_text)
 
+    # Proposed owners: a finding that an area has "no owner" isn't actionable on its
+    # own. For each unowned area, suggest the least-loaded member as a starting point
+    # (clearly a suggestion to validate, per the EOS "assign one now, even
+    # temporarily" rule). Keeps the gap visible while making it actionable.
+    proposed: Dict[str, str] = {}
+    if members:
+        a_load = {m.id: 0 for m in members}
+        for w in workstreams:
+            for mid, cs in raci.get(w.id, {}).items():
+                if "A" in cs:
+                    a_load[mid] = a_load.get(mid, 0) + 1
+        for w in workstreams:
+            cell = raci.get(w.id, {})
+            if not any("A" in cs for cs in cell.values()):
+                cand = min(members, key=lambda m: a_load.get(m.id, 0))
+                proposed[w.id] = cand.name
+                a_load[cand.id] = a_load.get(cand.id, 0) + 1
+
+    # Governance note: a tiny or even-numbered set of decision-makers can deadlock a
+    # majority-vote rule. Flag it deterministically — it's a structural certainty,
+    # not a judgment call.
+    structure_notes: List[str] = []
+    n = len(members)
+    if 0 < n <= 3:
+        structure_notes.append(
+            f"With only {n} decision-maker{'s' if n != 1 else ''}, a majority-vote "
+            "rule can deadlock (a tie with no resolver). Define a tiebreaker now — a "
+            "designated lead who decides, or your faculty advisor for ties — so a "
+            "disagreement can't stall the team the way it did before.")
+    elif n >= 4 and n % 2 == 0:
+        structure_notes.append(
+            f"With an even number of voters ({n}), a majority-vote rule can tie. Name "
+            "a tiebreaker so decisions don't stall.")
+
     return {
         "members": members,
         "workstreams": workstreams,
         "raci": raci,
         "raci_result": raci_result,
+        "proposed_owners": proposed,
+        "structure_notes": structure_notes,
         "coach": coach,
         "roadmap": roadmap,
         "continuity": continuity,
@@ -396,18 +432,45 @@ def normalize_charter(d: dict) -> dict:
     return charter
 
 
+# Deterministic severity so every issue carries a visible urgency, regardless of
+# the model. Urgent = act this week; important = this month; planned = later.
+_URGENT_WORDS = ("resign", "collapse", "stall", "at risk", "broke", "broken",
+                 "access", "payroll", "deadline", "emergency", "interim",
+                 "leaderless", "funding", "eligibility", "registration",
+                 "register", "shut down", "disband", "lock", "locked out")
+_IMPORTANT_WORDS = ("trust", "decision", "authority", "approval", "role", "owner",
+                    "ownership", "raci", "communication", "boundary", "boundaries",
+                    "unclear", "ambiguity", "ambiguous", "conflict")
+_SEV_RANK = {"urgent": 0, "important": 1, "planned": 2}
+
+
+def _issue_severity(text: str) -> str:
+    t = text.lower()
+    if any(w in t for w in _URGENT_WORDS):
+        return "urgent"
+    if any(w in t for w in _IMPORTANT_WORDS):
+        return "important"
+    return "planned"
+
+
 def normalize_issues(lst: list) -> list:
-    """Validate the issues list (IDS): each needs a title; owner defaults to TBD."""
+    """Validate the issues list (IDS): each needs a title; owner defaults to TBD.
+
+    Adds a deterministic severity and sorts most-urgent first, so the leadership
+    collapse never sits visually equal to a missing-RACI note."""
     out: List[Dict] = []
     for it in (lst or [])[:MAX_ISSUES]:
         title = str(it.get("issue", "")).strip()
         if not title:
             continue
+        next_step = str(it.get("next_step", "")).strip()
         out.append({
             "issue": title,
             "suggested_owner": str(it.get("suggested_owner", "TBD")).strip() or "TBD",
-            "next_step": str(it.get("next_step", "")).strip(),
+            "next_step": next_step,
+            "severity": _issue_severity(f"{title} {next_step}"),
         })
+    out.sort(key=lambda it: _SEV_RANK.get(it["severity"], 1))
     return out or None
 
 
@@ -690,12 +753,16 @@ def report_html(ws: dict) -> str:
                  "(structural completeness only — risks flagged below)</span></div>")
         # The table behind the score — never show the number without the content.
         mname = {m.id: m.name for m in diag.get("members", [])}
+        proposed = diag.get("proposed_owners", {})
         trows = []
         for w in diag.get("workstreams", []):
             cell = diag.get("raci", {}).get(w.id, {})
             a = ", ".join(mname.get(m, m) for m, cs in cell.items() if "A" in cs)
             rr = ", ".join(mname.get(m, m) for m, cs in cell.items() if "R" in cs)
-            trows.append((w.name, a or "— none —", rr or "— none —"))
+            if not a:
+                sug = proposed.get(w.id)
+                a = f"— none — · suggest: {sug}" if sug else "— none —"
+            trows.append((w.name, a, rr or "— none —"))
         if trows:
             s.append("<table style='border-collapse:collapse;width:100%;margin:8px 0;"
                      "font-size:14px'><thead><tr>"
@@ -713,6 +780,8 @@ def report_html(ws: dict) -> str:
             s.append(f"<div class='finding'>"
                      f"<span class='pill' style='color:{color};background:{bg}'>{tag}</span>"
                      f"{_md_bold(f['msg'])}</div>")
+        for note in diag.get("structure_notes", []):
+            s.append(f"<div class='finding'>⚖️ {_esc(note)}</div>")
         primary = diag["coach"].get("primary")
         if primary:
             s.append("<h2>🎯 Start here</h2>")
@@ -741,8 +810,17 @@ def report_html(ws: dict) -> str:
 
     if issues:
         s.append("<h2>🔟 Issues to work (IDS)</h2>")
+        s.append("<p class='sub'>Sorted by urgency: 🔴 act this week · 🟡 act this "
+                 "month · ⬜ plan ahead.</p>")
+        sev = {"urgent": ("🔴 Urgent — act this week", "#A32D2D"),
+               "important": ("🟡 Important — act this month", "#854F0B"),
+               "planned": ("⬜ Planned — act next term", "#555")}
         for it in issues:
-            s.append(f"<div class='issue'><strong>{_esc(it['issue'])}</strong>"
+            label, col = sev.get(it.get("severity", "important"), sev["important"])
+            s.append(f"<div class='issue' style='border-left-color:{col}'>"
+                     f"<div style='font-size:12px;font-weight:600;color:{col};"
+                     f"margin-bottom:3px'>{label}</div>"
+                     f"<strong>{_esc(it['issue'])}</strong>"
                      f"<div class='meta'>Owner: {_esc(it['suggested_owner'])} · "
                      f"Next step: {_esc(it['next_step'])}</div></div>")
 

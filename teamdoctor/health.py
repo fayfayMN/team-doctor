@@ -346,6 +346,22 @@ LIGHT_WEEKLY = {
         "Do a 15-minute check-in once a week on a set day.",
         "Skip quarterly planning and metric dashboards until the team grows."]}
 
+# Replaces Rocks + Scorecard for a small team: a couple of semester goals and a
+# few simple health signals — not OKRs and a metrics dashboard.
+LIGHT_DIRECTION = {
+    "key": "direction", "title": "4. Set 2–3 semester goals + watch 2–3 health signals",
+    "done": lambda s: bool(s.get("has_rocks")) or bool(s.get("has_scorecard")),
+    "what": "A couple of goals for the whole semester, plus a few simple signals you "
+            "glance at each session — sized for a small club, not a company.",
+    "why": "You need direction and early warning, not quarterly OKRs or a 15-metric "
+           "dashboard that no one at your size will keep up.",
+    "steps": [
+        "Pick 2–3 goals for the SEMESTER (e.g. “run 4 sessions”, “grow to 20 active "
+        "members”, “send 2 teams to a competition”) — not quarterly Rocks.",
+        "Pick 2–3 health signals to watch: attendance per session, officer response "
+        "time, and account-access coverage (who can get into each tool).",
+        "Glance at them at each check-in; if one slips, it becomes the next decision."]}
+
 
 def roadmap(state: Dict) -> List[Dict]:
     """Return the path with each stage marked done / 'now' / 'next'.
@@ -360,6 +376,11 @@ def roadmap(state: Dict) -> List[Dict]:
         if small and stage["key"] in ("rocks", "scorecard"):
             continue
         stages.append(LIGHT_WEEKLY if (small and stage["key"] == "weekly") else stage)
+    if small:
+        # One light "direction" stage stands in for Rocks + Scorecard, placed before
+        # the pulse stage.
+        idx = next((i for i, s in enumerate(stages) if s["key"] == "pulse"), len(stages))
+        stages.insert(idx, LIGHT_DIRECTION)
 
     out: List[Dict] = []
     first_open = True

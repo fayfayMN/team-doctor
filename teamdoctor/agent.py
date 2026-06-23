@@ -104,6 +104,18 @@ The skills you apply in this single pass:
 - Names: use real names. If the narrator speaks in first person ("I", "we", "you"),
   use their actual name if given, otherwise their role (e.g. "VP") — never the
   literal word "You" as a member or owner.
+- Who counts as a member: list ONLY currently-active people in "members". Do NOT
+  list a faculty advisor / sponsor, or anyone who has resigned or left — name them
+  in the summary or root_cause instead. (This keeps the team-size right, which
+  decides whether lightweight or full advice applies.)
+- Use the team's REAL structure: if the description (or an attached document) already
+  names the team's areas of work, roles, or officers, use THOSE names verbatim —
+  don't invent generic ones.
+- Never recommend contacting, reconciling with, or "reaching out to" someone who has
+  resigned or left. Any next_step about them must be forward-only (transfer their
+  accounts, redistribute their areas, define the role for their successor).
+- root_cause must NOT be empty when there is a conflict or breakdown — name the
+  underlying clash explicitly.
 - Issues: surface 3-6 real, solvable problems, most important first, ROOT CAUSE
   before symptoms. suggested_owner must be a named member, or "TBD" if unclear; give
   one concrete next_step each. If trust is broken, issue next_steps must be

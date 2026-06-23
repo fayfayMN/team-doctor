@@ -123,15 +123,21 @@ def render_charter(charter: dict) -> None:
 
 def _raci_table(diag: dict) -> list:
     """Build the actual ownership table behind the score, so the number is never
-    shown without the content that produced it."""
+    shown without the content that produced it. Unowned areas show a proposed
+    owner to make the gap actionable."""
     mname = {m.id: m.name for m in diag.get("members", [])}
+    proposed = diag.get("proposed_owners", {})
     rows = []
     for w in diag.get("workstreams", []):
         cell = diag.get("raci", {}).get(w.id, {})
         a = [mname.get(mid, mid) for mid, cs in cell.items() if "A" in cs]
         r = [mname.get(mid, mid) for mid, cs in cell.items() if "R" in cs]
+        acc = ", ".join(a)
+        if not acc:
+            sug = proposed.get(w.id)
+            acc = f"— none — · suggest: {sug}" if sug else "— none —"
         rows.append({"Area of work": w.name,
-                     "Accountable (owns it)": ", ".join(a) or "— none —",
+                     "Accountable (owns it)": acc,
                      "Responsible (does it)": ", ".join(r) or "— none —"})
     return rows
 
@@ -162,11 +168,17 @@ def render_diagnosis(diag: dict) -> None:
     table = _raci_table(diag)
     if table:
         st.table(table)
-        st.caption("This is the ownership map behind the score. Gaps (— none —) and "
-                   "any one person owning several areas are exactly what to fix.")
+        cap = ("This is the ownership map behind the score. Gaps (— none —) and any "
+               "one person owning several areas are exactly what to fix.")
+        if diag.get("proposed_owners"):
+            cap += (" “suggest:” names a proposed starting owner for each unowned "
+                    "area — assign it now even temporarily, then validate with the team.")
+        st.caption(cap)
     for f in r["findings"]:
         icon = {"error": "🔴", "warn": "🟡", "ok": "🟢"}.get(f["level"], "•")
         st.markdown(f"{icon} {f['msg']}")
+    for note in diag.get("structure_notes", []):
+        st.markdown(f"⚖️ {note}")
 
     primary = diag["coach"].get("primary")
     if primary:
@@ -213,7 +225,13 @@ def render_diagnosis(diag: dict) -> None:
 
 def render_issues(issues: list) -> None:
     st.markdown("### 🔟 Issues to work (IDS)")
+    st.caption("Sorted by urgency: 🔴 act this week · 🟡 act this month · ⬜ plan ahead.")
+    sev = {"urgent": "🔴 Urgent — act this week",
+           "important": "🟡 Important — act this month",
+           "planned": "⬜ Planned — act next term"}
     for it in issues:
+        badge = sev.get(it.get("severity", "important"), sev["important"])
+        st.markdown(f"{badge}")
         st.markdown(f"**{it['issue']}**")
         st.caption(f"Owner: {it['suggested_owner']} · Next step: {it['next_step']}")
 
