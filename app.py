@@ -366,29 +366,60 @@ if not _has_content(st.session_state.workspace):
             placeholder="“We're a 6-person startup. Our founder does sales, product, "
             "and support. Two engineers wait to be told what to do. Nobody owns "
             "finance. We argue about decisions and never write them down.”")
-        up = st.file_uploader("…or upload a description (PDF, Word, .txt, .md)",
-                              type=["pdf", "docx", "doc", "txt", "md"])
+        ups = st.file_uploader(
+            "…or upload one or more files — PDF, Word, text, or images "
+            "(PNG/JPG, e.g. a photo of a whiteboard or org chart)",
+            type=["pdf", "docx", "doc", "txt", "md",
+                  "png", "jpg", "jpeg", "webp", "gif"],
+            accept_multiple_files=True)
+        st.caption("You can drop several at once. Images are read by your own "
+                   "vision model (Google Gemini or OpenAI).")
         if st.button("🩺 Diagnose with AI", type="primary"):
-            text = desc.strip()
-            if not text and up is not None:
+            img_mime = {"png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg",
+                        "webp": "image/webp", "gif": "image/gif"}
+            parts, images = [], []
+            if desc.strip():
+                parts.append(desc.strip())
+            for f in (ups or []):
+                ext = (f.name.rsplit(".", 1)[-1] if "." in f.name else "").lower()
+                if ext in img_mime:
+                    images.append((img_mime[ext], f.read()))
+                    continue
                 try:
-                    text = ingest.extract_text(up).strip()
+                    t = ingest.extract_text(f).strip()
                 except Exception as e:
-                    text = ""
-                    st.warning(f"Couldn't read that file: {e}. Try a text PDF or .docx.")
-                if text and len(text) < ingest.MIN_USABLE:
-                    st.warning("Couldn't extract readable text — try a text-based "
-                               "PDF, a .docx, or paste the description.")
-                    text = ""
-            if not text:
-                st.warning("Type or paste a description, or upload a file.")
+                    st.warning(f"Couldn't read {f.name}: {e}. Try a text PDF or .docx.")
+                    continue
+                if t and len(t) >= ingest.MIN_USABLE:
+                    parts.append(t)
+                else:
+                    st.warning(f"Couldn't extract readable text from {f.name} — try a "
+                               "text-based PDF, a .docx, or paste the description.")
+
+            if not parts and not images:
+                st.warning("Type or paste a description, or upload a file or image.")
             elif _need_key_missing():
                 st.warning("Paste your own API key in the sidebar first "
                            "(or pick Ollama if running locally).")
             else:
-                with st.spinner("The agent is reading your team…"):
-                    run_intake(text)
-                st.rerun()
+                if images:
+                    try:
+                        with st.spinner(f"Reading {len(images)} image(s) with your "
+                                        "vision model…"):
+                            vtext = llm.transcribe_images(provider, model, api_key,
+                                                          images).strip()
+                        if vtext:
+                            parts.append(vtext)
+                    except llm.LLMError as e:
+                        st.warning(str(e))
+                combined = "\n\n".join(p for p in parts if p.strip())
+                if not combined:
+                    st.warning("Nothing readable to diagnose yet — try a clearer "
+                               "image or paste a description.")
+                else:
+                    with st.spinner("The agent is reading your team…"):
+                        run_intake(combined)
+                    st.rerun()
 else:
     if st.button("🔄 Start over / diagnose another team"):
         st.session_state.messages = []

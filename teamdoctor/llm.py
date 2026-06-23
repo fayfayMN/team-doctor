@@ -12,6 +12,7 @@ The model is used ONLY to (a) turn a messy team description into structure and
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 from typing import Dict, List, Optional
@@ -36,6 +37,7 @@ PROVIDERS: Dict[str, Dict] = {
         "get_key": "https://aistudio.google.com/apikey",
         "kind": "openai",
         "supports_json_mode": False,
+        "supports_vision": True,
         "needs_key": True,
     },
     "Groq (free)": {
@@ -63,6 +65,7 @@ PROVIDERS: Dict[str, Dict] = {
         "get_key": "https://platform.openai.com/api-keys",
         "kind": "openai",
         "supports_json_mode": True,
+        "supports_vision": True,
         "needs_key": True,
     },
     "Anthropic (Claude)": {
@@ -72,6 +75,9 @@ PROVIDERS: Dict[str, Dict] = {
         "get_key": "https://console.anthropic.com/settings/keys",
         "kind": "anthropic",
         "supports_json_mode": False,
+        # Default model (haiku) is text-only; leave vision off so a booth visitor
+        # gets the clear "switch to Gemini/OpenAI" message instead of an API error.
+        "supports_vision": False,
         "needs_key": True,
     },
     "Ollama (local, free)": {
@@ -100,6 +106,41 @@ def chat(provider: str, model: str, api_key: str, messages: List[Dict],
         return _anthropic(cfg, model, api_key, messages, temperature)
     return _openai(cfg, model, api_key, messages, temperature,
                    json_mode and cfg.get("supports_json_mode", False))
+
+
+VISION_PROMPT = (
+    "These image(s) describe a team — e.g. a photo of a whiteboard, an org chart, "
+    "a roster, a screenshot, or handwritten notes. Read everything in them and "
+    "write a clear plain-English description of the team: who is on it, each "
+    "person's role, the areas of work, and who owns or does what. Transcribe any "
+    "text faithfully. Output ONLY the description, as prose — no preamble.")
+
+
+def transcribe_images(provider: str, model: str, api_key: str,
+                      images: List[tuple]) -> str:
+    """Turn uploaded image(s) into a plain-text team description via the visitor's
+    OWN vision-capable model. ``images`` is a list of (mime_type, raw_bytes).
+
+    Only providers whose default model can see are enabled; others get a friendly
+    nudge to switch. Keeps the BYOK promise — it's the visitor's key and quota.
+    """
+    cfg = PROVIDERS.get(provider)
+    if not cfg:
+        raise LLMError(f"Unknown provider: {provider}")
+    if not cfg.get("supports_vision"):
+        raise LLMError("This provider can't read images. Switch to "
+                       "**Google Gemini (free)** or **OpenAI** in the sidebar, or "
+                       "upload a PDF / Word / text file instead.")
+    if not images:
+        return ""
+    model = (model or cfg["default_model"]).strip()
+    content = [{"type": "text", "text": VISION_PROMPT}]
+    for mime, raw in images:
+        b64 = base64.b64encode(raw).decode("ascii")
+        content.append({"type": "image_url",
+                        "image_url": {"url": f"data:{mime};base64,{b64}"}})
+    return _openai(cfg, model, api_key,
+                   [{"role": "user", "content": content}], 0.2, False)
 
 
 def _openai(cfg, model, api_key, messages, temperature, json_mode) -> str:
