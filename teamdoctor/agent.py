@@ -30,6 +30,13 @@ snapshot as ONE JSON object and NOTHING else:
   "team_name": string,
   "mission": string,           // from their words, or a crisp one you draft
   "summary": string,           // one sentence on what is going wrong
+  "root_cause": string,        // the ONE underlying cause — what actually broke and
+                               // why — distinct from the symptom list. "" if unclear.
+  "trust": "ok"|"strained"|"broken",   // relationship health between key people
+  "decision_authority": {
+     "conflict": boolean,      // do people disagree on what needs approval vs is autonomous?
+     "models": [string],       // if so, name each competing view in a few words
+     "first_step": string },   // the one thing to align on before anything else
   "members": [{"name": string, "role": string}],
   "workstreams": [{"name": string, "description": string}],
   "raci": [{"workstream": string, "member": string, "code": "A"|"R"|"C"|"I"}],
@@ -69,10 +76,38 @@ The skills you apply in this single pass:
   * Gaps ARE the diagnosis. It is correct and expected for the result to show no
     owner, an overloaded person, or uninvolved members — never paper over them by
     inventing roles. Never invent people or work they didn't mention.
+- Root cause: name the ONE underlying cause — what actually broke and why —
+  separate from the symptoms. Symptoms are the visible mess (missing RACI, poor
+  communication); the root cause is the thing that, if it had been different, none
+  of the symptoms would have happened (e.g. "two people never agreed on what needs
+  approval vs what's autonomous, so every independent action read as a power grab").
+  Prescriptions that treat symptoms without the root cause will fail.
+- Decision authority: the single most revealing question is whether people agree on
+  HOW decisions get made — specifically what needs sign-off vs what someone can do
+  on their own. If the description shows they DON'T agree (one person acts; another
+  feels bypassed or excluded), set decision_authority.conflict=true, name both
+  competing views in "models", and put the alignment they need in "first_step". This
+  usually IS the root cause for collaboration blowups.
+- Trust: judge it ok / strained / broken. "Broken" means the relationship has
+  effectively ended (someone resigned over it, or says trust is gone). When trust is
+  BROKEN, do NOT recommend a facilitated reconciliation or "rebuild trust" — that
+  ship has sailed. Recommend forward-only governance: clear roles and decision rules
+  so the team can function without depending on a repaired relationship.
 - Charter: draft a tight, specific founding charter (3-5 short values; one-sentence
-  rules). Not generic boilerplate.
-- Issues: surface 3-6 real, solvable problems, most important first. suggested_owner
-  must be a named member, or "TBD" if unclear; give one concrete next_step each.
+  rules) that targets THIS team's actual failure modes — not generic boilerplate
+  like "Transparency, Respect." It must answer the boundary questions that caused
+  the trouble: what counts as a team initiative vs an individual project, and what
+  needs the lead's sign-off vs what a member can do autonomously.
+- Size: for a very small team (≈4 or fewer active people), keep every
+  recommendation lightweight — a shared decision log and a short weekly check-in,
+  NOT quarterly OKRs, scorecards, or formal meeting systems built for big orgs.
+- Names: use real names. If the narrator speaks in first person ("I", "we", "you"),
+  use their actual name if given, otherwise their role (e.g. "VP") — never the
+  literal word "You" as a member or owner.
+- Issues: surface 3-6 real, solvable problems, most important first, ROOT CAUSE
+  before symptoms. suggested_owner must be a named member, or "TBD" if unclear; give
+  one concrete next_step each. If trust is broken, issue next_steps must be
+  forward-looking governance, not relationship repair.
 
 Be faithful to what they said. Set ready=false ONLY if you genuinely cannot
 identify who is on the team or what the team works on at all. Undefined or unclear

@@ -422,10 +422,24 @@ def build_workspace(data: dict) -> tuple:
 
     diagnosis = diagnose(data)
     issues = normalize_issues(data.get("issues"))
+    root_cause = str(data.get("root_cause", "") or "").strip()
+    trust = str(data.get("trust", "") or "").strip().lower()
+    da = data.get("decision_authority") or {}
+    decision_authority = None
+    if isinstance(da, dict) and da.get("conflict"):
+        decision_authority = {
+            "models": [str(m).strip() for m in (da.get("models") or []) if str(m).strip()],
+            "first_step": str(da.get("first_step", "") or "").strip()}
 
-    ws = {"spec": data, "diagnosis": diagnosis, "charter": charter, "issues": issues}
+    ws = {"spec": data, "diagnosis": diagnosis, "charter": charter, "issues": issues,
+          "root_cause": root_cause, "trust": trust,
+          "decision_authority": decision_authority}
 
     skills = ["🧠 Read your team into structure"]
+    if root_cause:
+        skills.append("🔍 Named the root cause")
+    if decision_authority:
+        skills.append("⚖️ Flagged a decision-authority conflict")
     if charter:
         skills.append("📜 Drafted a charter")
     if diagnosis:
@@ -486,6 +500,15 @@ def findings_context(diag: dict) -> str:
 def workspace_context(ws: dict) -> str:
     """Compact, ground-truth summary of everything the agent built — for Q&A."""
     lines: List[str] = []
+    if ws.get("root_cause"):
+        lines.append(f"ROOT CAUSE: {ws['root_cause']}")
+    if ws.get("trust") == "broken":
+        lines.append("TRUST: broken — recommend forward-only governance, not "
+                     "reconciliation.")
+    da = ws.get("decision_authority")
+    if da and da.get("models"):
+        lines.append("DECISION-AUTHORITY CONFLICT between: "
+                     + " vs ".join(da["models"]))
     charter = ws.get("charter")
     if charter:
         lines.append("CHARTER:")
@@ -619,6 +642,30 @@ def report_html(ws: dict) -> str:
         s.append("<ul style='margin:6px 0'>"
                  + "".join(f"<li>{_esc(step)}</li>" for step in cont["steps"])
                  + "</ul></div>")
+
+    rc = (ws.get("root_cause") or "").strip()
+    da = ws.get("decision_authority")
+    trust = (ws.get("trust") or "").strip().lower()
+    if rc or da or trust == "broken":
+        s.append("<h2>🔍 What's really going on</h2>")
+        if rc:
+            s.append(f"<p><strong>Root cause:</strong> {_esc(rc)}</p>")
+            s.append("<p class='sub'>Everything below is downstream of this — fix the "
+                     "cause, not just the symptoms.</p>")
+        if da:
+            models = da.get("models") or []
+            s.append("<p><strong>⚖️ No shared rule yet for how decisions get made.</strong></p>")
+            if models:
+                s.append("<p>Two views are in play: "
+                         + " <strong>vs.</strong> ".join(f"<em>{_esc(m)}</em>" for m in models)
+                         + "</p>")
+            if da.get("first_step"):
+                s.append(f"<p><strong>Align on this first:</strong> {_esc(da['first_step'])}</p>")
+        if trust == "broken":
+            s.append("<p style='background:#FAEEDA;border-radius:6px;padding:8px 12px'>"
+                     "Trust reads as <strong>broken</strong>, not just strained — so the "
+                     "fix is forward-only governance (clear roles and decision rules), "
+                     "not a reconciliation conversation.</p>")
 
     if charter:
         s.append("<h2>📜 Charter</h2>")

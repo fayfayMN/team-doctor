@@ -218,7 +218,37 @@ def render_issues(issues: list) -> None:
         st.caption(f"Owner: {it['suggested_owner']} · Next step: {it['next_step']}")
 
 
+def render_root_cause(ws: dict) -> None:
+    """Show the root cause and any decision-authority conflict BEFORE prescriptions
+    — fixing the cause matters more than the symptom list. AI path only."""
+    rc = ws.get("root_cause")
+    da = ws.get("decision_authority")
+    trust = ws.get("trust")
+    if not (rc or da or trust == "broken"):
+        return
+    st.markdown("### 🔍 What's really going on")
+    if rc:
+        st.markdown(f"**Root cause:** {rc}")
+        st.caption("Everything below is downstream of this. Fix the cause, not just "
+                   "the symptoms.")
+    if da:
+        models = da.get("models") or []
+        st.markdown("**⚖️ You don't yet agree on how decisions get made.**")
+        if models:
+            st.markdown("Two views are in play: "
+                        + " **vs.** ".join(f"*{m}*" for m in models))
+        if da.get("first_step"):
+            st.markdown(f"**Align on this first:** {da['first_step']}")
+    if trust == "broken":
+        st.warning("Trust here reads as **broken**, not just strained — so the fix is "
+                   "forward-only governance (clear roles and decision rules), not a "
+                   "reconciliation conversation. Build a structure that works even if "
+                   "the relationship doesn't recover.")
+    st.divider()
+
+
 def render_workspace(ws: dict) -> None:
+    render_root_cause(ws)
     if ws.get("charter"):
         render_charter(ws["charter"])
         st.divider()
@@ -429,8 +459,11 @@ if not _has_content(st.session_state.workspace):
                 if t and len(t) >= ingest.MIN_USABLE:
                     parts.append(t)
                 else:
-                    st.warning(f"Couldn't extract readable text from {f.name} — try a "
-                               "text-based PDF, a .docx, or paste the description.")
+                    st.warning(f"⚠️ Got no readable text from **{f.name}** — it's "
+                               "likely an image-only/scanned PDF. Re-save its pages as "
+                               "PNG/JPG and upload those (your vision model will read "
+                               "them), or paste the text directly. It was **not** "
+                               "included in the diagnosis.")
 
             if not parts and not images:
                 st.warning("Type or paste a description, or upload a file or image.")
