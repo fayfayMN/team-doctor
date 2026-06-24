@@ -415,11 +415,19 @@ def diagnose(spec: dict) -> dict:
     raci_result = raci_check.check(clean_raci, workstreams, active_members)
     raci_errors = sum(1 for f in raci_result["findings"] if f["level"] == "error")
 
+    # Classify the team type once (club / startup / nonprofit / small business /
+    # generic) from the team name + everything described, so advice wording adapts
+    # to the case instead of assuming a student club.
+    profile = health.profile_for(
+        " ".join([spec.get("team_name", "") or "", spec.get("mission", "") or "",
+                  full_text]))
+
     state = {
         "has_charter": bool(spec.get("mission")),
         "has_workstreams": bool(workstreams),
         "raci_errors": raci_errors,
         "team_size": len(active_members),
+        "profile": profile,
         "decisions_count": 0,
         "responses_count": 0,
         "pulse": None,
@@ -431,7 +439,7 @@ def diagnose(spec: dict) -> dict:
     roadmap = health.roadmap(state)
     # Crisis check: scan everything the user told us for signs of a recent
     # departure/collapse; if found, stabilizing comes before the roadmap.
-    continuity = health.continuity(full_text)
+    continuity = health.continuity(full_text, profile)
 
     # Proposed owners: a finding that an area has "no owner" isn't actionable on its
     # own. For each unowned area (including a vacated one), suggest the least-loaded
@@ -462,18 +470,19 @@ def diagnose(spec: dict) -> dict:
 
     # Governance note: a tiny or even-numbered set of decision-makers can deadlock a
     # majority-vote rule. Flag it deterministically — it's a structural certainty.
+    # The suggested tiebreaker adapts to the team type (advisor / board / owner / …).
+    authority = profile.get("authority", "a designated senior lead")
     n = len(active_members)
     if 0 < n <= 3:
         structure_notes.append(
             f"⚖️ With only {n} active decision-maker{'s' if n != 1 else ''}, a "
-            "majority-vote rule can deadlock (a tie with no resolver). Name your "
-            "faculty advisor as the tiebreaker for tied officer votes — so a "
-            "disagreement can't stall the team the way it did before.")
+            "majority-vote rule can deadlock (a tie with no resolver). Name "
+            f"{authority} as the tiebreaker for tied votes — so a disagreement can't "
+            "stall the team the way it did before.")
     elif n >= 4 and n % 2 == 0:
         structure_notes.append(
             f"⚖️ With an even number of voters ({n}), a majority-vote rule can tie. "
-            "Name your faculty advisor (or a designated lead) as the tiebreaker so "
-            "decisions don't stall.")
+            f"Name {authority} as the tiebreaker so decisions don't stall.")
 
     return {
         "members": active_members,

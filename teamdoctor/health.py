@@ -35,14 +35,98 @@ CRISIS_WORDS = (
     "fell apart", "disband", "no president", "without a president",
 )
 
+# ── Team-type profiles ────────────────────────────────────────────────────────
+# The same deterministic logic applies to any team, but the *wording* of advice
+# adapts to the kind of team — a student club, a startup, a nonprofit, a small
+# business, or a generic team. Each profile supplies the right oversight figure
+# (used for the tiebreaker and who-to-notify), the planning horizon, example
+# goals, the health signals to watch, and one situation-specific continuity step.
+# Classification is keyword-based with a generic fallback, so nothing is hardcoded
+# to one case. To support a new kind of team, add a profile here.
+TEAM_PROFILES: List[Dict] = [
+    {"kind": "club",
+     "match": ("club", "university", "college", "student", "campus", "chapter",
+               "fraternity", "sorority", "society", "officer", "advisor"),
+     "authority": "your faculty advisor",
+     "period": "semester", "period_adj": "semester",
+     "goal_examples": "“run 4 sessions”, “grow to 20 active members”, “send 2 teams "
+                      "to a competition”",
+     "signals": "attendance per session, officer response time, and account-access "
+                "coverage (who can get into each tool)",
+     "continuity_step": "Check eligibility rules: many student orgs need a minimum "
+                        "number of officers (often four) and current registration to "
+                        "keep funding and room booking. Confirm you still qualify and "
+                        "fix gaps before the deadline."},
+    {"kind": "startup",
+     "match": ("startup", "founder", "co-founder", "cofounder", "investor", "seed",
+               "series a", "series b", "saas", "mvp", "runway", "venture"),
+     "authority": "your CEO/founder or board",
+     "period": "quarter", "period_adj": "quarterly",
+     "goal_examples": "“ship the MVP”, “land 5 paying customers”, “reach a revenue "
+                      "milestone”",
+     "signals": "weekly active users, revenue, runway, and account-access coverage",
+     "continuity_step": "Secure legal & financial continuity: make sure payroll, "
+                        "banking, signing authority, and key vendor/contract logins "
+                        "aren't single-personed on whoever left; tell your board or "
+                        "investors factually."},
+    {"kind": "nonprofit",
+     "match": ("nonprofit", "non-profit", "charity", "board", "trustee", "donor",
+               "grant", "volunteer", "mission-driven", "foundation"),
+     "authority": "your board chair",
+     "period": "quarter", "period_adj": "quarterly",
+     "goal_examples": "“close 2 grants”, “run 3 community events”, “recruit 10 "
+                      "volunteers”",
+     "signals": "donations/grants in progress, volunteer hours, and account-access "
+                "coverage",
+     "continuity_step": "Confirm governance requirements: board quorum, any officer "
+                        "minimums in your bylaws, and grant/donor obligations the "
+                        "person who left was responsible for."},
+    {"kind": "small business",
+     "match": ("café", "cafe", "restaurant", "shop ", "store", "salon", "barista",
+               "storefront", "boutique", "bakery", "retail", "small business",
+               "brick-and-mortar"),
+     "authority": "the owner",
+     "period": "month", "period_adj": "monthly",
+     "goal_examples": "“lift weekly sales 10%”, “launch one new offering”, “improve "
+                      "repeat-customer rate”",
+     "signals": "weekly sales, repeat customers, cash on hand, and account-access "
+                "coverage",
+     "continuity_step": "Secure the money and access first: bank, payment processor, "
+                        "payroll, supplier accounts, and any licenses tied to the "
+                        "person who left."},
+    {"kind": "team",  # generic fallback — always last
+     "match": (),
+     "authority": "a designated senior lead or sponsor",
+     "period": "quarter", "period_adj": "quarterly",
+     "goal_examples": "2–3 concrete outcomes you can finish in the period",
+     "signals": "throughput, response time, and account-access coverage",
+     "continuity_step": "Make sure no critical account, contract, or approval is "
+                        "single-personed on the person who left — give a second "
+                        "person access to each."},
+]
 
-def continuity(text: str) -> Optional[Dict]:
-    """If the situation describes a recent departure/collapse, return an
-    emergency continuity checklist that must come BEFORE any governance work.
+
+def profile_for(text: str) -> Dict:
+    """Pick the best-fitting team profile by keyword hits; generic 'team' if none.
+    Deterministic and extensible — add a profile to TEAM_PROFILES for a new case."""
+    t = (text or "").lower()
+    best, best_hits = TEAM_PROFILES[-1], 0
+    for p in TEAM_PROFILES[:-1]:
+        hits = sum(1 for w in p["match"] if w in t)
+        if hits > best_hits:
+            best, best_hits = p, hits
+    return best
+
+
+def continuity(text: str, profile: Optional[Dict] = None) -> Optional[Dict]:
+    """If the situation describes a recent departure/collapse, return an emergency
+    continuity checklist that must come BEFORE any governance work. The core steps
+    are universal; one step and the who-to-notify line adapt to the team type.
     Deterministic: a keyword trigger over the description, not AI judgment."""
     t = (text or "").lower()
     if not any(w in t for w in CRISIS_WORDS):
         return None
+    p = profile or profile_for(text)
     return {
         "title": "Stabilize first — before any roadmap",
         "why": "Someone in a key role has left or the team is in transition. A few "
@@ -51,13 +135,11 @@ def continuity(text: str) -> Optional[Dict]:
         "steps": [
             "Declare an interim structure today — even “co-leads until we regroup.” "
             "A named stand-in stops the team from stalling.",
-            "Audit account access: who controls email, Discord/Slack, LinkedIn, "
-            "Notion, the website, shared drives, and any registration or payment "
-            "logins? Make sure at least two remaining people can get into each.",
-            "Notify your faculty advisor or sponsor in writing — short and factual.",
-            "Check eligibility rules: many student orgs need a minimum number of "
-            "officers (often four) and current registration to keep funding and room "
-            "booking. Confirm you still qualify and fix gaps before the deadline.",
+            "Audit account access: who controls email, chat, social accounts, shared "
+            "docs and drives, the website, and any payment or admin logins? Make sure "
+            "at least two remaining people can get into each.",
+            f"Notify {p['authority']} in writing — short and factual.",
+            p["continuity_step"],
             "Pause external posting until the remaining team agrees what goes out "
             "publicly and who approves it.",
             "Write down what happened and every decision you make this week, so the "
@@ -346,31 +428,35 @@ LIGHT_WEEKLY = {
         "Do a 15-minute check-in once a week on a set day.",
         "Skip quarterly planning and metric dashboards until the team grows."]}
 
-# Replaces Rocks + Scorecard for a small team: a couple of semester goals and a
-# few simple health signals — not OKRs and a metrics dashboard.
-LIGHT_DIRECTION = {
-    "key": "direction", "title": "4. Set 2–3 semester goals + watch 2–3 health signals",
-    "done": lambda s: bool(s.get("has_rocks")) or bool(s.get("has_scorecard")),
-    "what": "A couple of goals for the whole semester, plus a few simple signals you "
-            "glance at each session — sized for a small club, not a company.",
-    "why": "You need direction and early warning, not quarterly OKRs or a 15-metric "
-           "dashboard that no one at your size will keep up.",
-    "steps": [
-        "Pick 2–3 goals for the SEMESTER (e.g. “run 4 sessions”, “grow to 20 active "
-        "members”, “send 2 teams to a competition”) — not quarterly Rocks.",
-        "Pick 2–3 health signals to watch: attendance per session, officer response "
-        "time, and account-access coverage (who can get into each tool).",
-        "Glance at them at each check-in; if one slips, it becomes the next decision."]}
+def _light_direction(profile: Dict) -> Dict:
+    """Replaces Rocks + Scorecard for a small team: a couple of period goals and a
+    few simple health signals, worded for the team's type — not OKRs + a dashboard."""
+    per = profile.get("period", "period")
+    return {
+        "key": "direction",
+        "title": f"4. Set 2–3 {per} goals + watch 2–3 health signals",
+        "done": lambda s: bool(s.get("has_rocks")) or bool(s.get("has_scorecard")),
+        "what": f"A couple of goals for the whole {per}, plus a few simple signals you "
+                "glance at regularly — sized for a small team, not a company.",
+        "why": "You need direction and early warning, not quarterly OKRs or a 15-metric "
+               "dashboard that no one at your size will keep up.",
+        "steps": [
+            f"Pick 2–3 goals for the {per.upper()} (e.g. {profile.get('goal_examples', '')}) "
+            "— not a long OKR list.",
+            f"Pick 2–3 health signals to watch: {profile.get('signals', '')}.",
+            "Glance at them at each check-in; if one slips, it becomes the next decision."]}
 
 
 def roadmap(state: Dict) -> List[Dict]:
     """Return the path with each stage marked done / 'now' / 'next'.
 
     Deterministic: 'done' is a rule over state; the first not-done stage is where
-    the team is now. Right-sizes for small teams — a tiny club sees a light
-    decision-log step and skips the Rocks/Scorecard machinery.
+    the team is now. Right-sizes for small teams — a tiny team sees a light
+    decision-log step and skips the Rocks/Scorecard machinery — and the light
+    'direction' stage is worded for the team's type (semester / quarter / month).
     """
     small = state.get("team_size", 99) <= SMALL_TEAM
+    profile = state.get("profile") or profile_for("")
     stages = []
     for stage in ROADMAP:
         if small and stage["key"] in ("rocks", "scorecard"):
@@ -380,7 +466,7 @@ def roadmap(state: Dict) -> List[Dict]:
         # One light "direction" stage stands in for Rocks + Scorecard, placed before
         # the pulse stage.
         idx = next((i for i, s in enumerate(stages) if s["key"] == "pulse"), len(stages))
-        stages.insert(idx, LIGHT_DIRECTION)
+        stages.insert(idx, _light_direction(profile))
 
     out: List[Dict] = []
     first_open = True
