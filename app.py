@@ -574,6 +574,25 @@ if _has_content(st.session_state.workspace):
                     run_intake(prompt)
                 st.rerun()
 
+elif st.session_state.messages:
+    # No diagnosis was produced, but the AI replied — e.g. it asked a follow-up
+    # question or hit an error. Without this, that reply was saved but never shown,
+    # so the page just looked like "spinner, then nothing."
+    st.markdown("#### Conversation")
+    for m in st.session_state.messages:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
+    st.caption("The AI needs a bit more to build a full diagnosis — reply below, or "
+               "use a Sample / Build-your-team (no AI needed).")
+    prompt = st.chat_input("Reply or add more detail…")
+    if prompt:
+        if _need_key_missing():
+            st.warning("Paste your own API key in the sidebar to continue.")
+        else:
+            with st.spinner("Thinking…"):
+                run_intake(prompt)
+            st.rerun()
+
 st.divider()
 st.caption("© 2026 Feifei Li. All rights reserved. Team Doctor is proprietary "
            "software. The diagnosis is deterministic and free; AI (optional) only "
