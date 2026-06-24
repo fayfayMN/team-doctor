@@ -36,19 +36,20 @@ with st.sidebar:
 
     api_key = ""
     if cfg.get("needs_key", True):
-        prefill = ""
-        try:
-            if cfg.get("secret_key"):
-                prefill = st.secrets.get(cfg["secret_key"], "")
-        except Exception:
-            prefill = ""
-        api_key = st.text_input("API key", value=prefill, type="password")
-        st.caption(f"🔑 Get a key: {cfg.get('get_key', '')}")
+        # Bring-your-own-key only: the field always starts empty and the key is
+        # never read from app secrets, so a visitor can never spend the owner's
+        # quota. The key lives only in this browser session.
+        api_key = st.text_input("Your API key", value="", type="password",
+                                placeholder="paste your own key")
+        st.caption(f"🔑 Get a free key: {cfg.get('get_key', '')}")
+        st.caption("🔒 Your key is used only for this session, in your browser — "
+                   "it's never stored or shared.")
         if provider.startswith("Google") or provider.startswith("Groq"):
             st.caption("✅ This provider has a free tier.")
     else:
-        st.caption("Runs locally — no key needed. Requires Ollama running "
-                   "(`ollama serve`).")
+        st.caption("Runs locally — no key needed. Requires Ollama running on the "
+                   "same machine (only works when you run the app locally, not on "
+                   "the cloud).")
 
     st.divider()
     st.caption("How it works: the health check (RACI + EOS coach) is pure "

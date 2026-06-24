@@ -33,7 +33,6 @@ PROVIDERS: Dict[str, Dict] = {
     "Google Gemini (free)": {
         "base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
         "default_model": "gemini-2.0-flash",
-        "secret_key": "gemini_api_key",
         "get_key": "https://aistudio.google.com/apikey",
         "kind": "openai",
         "supports_json_mode": False,
@@ -43,7 +42,6 @@ PROVIDERS: Dict[str, Dict] = {
     "Groq (free)": {
         "base_url": "https://api.groq.com/openai/v1",
         "default_model": "llama-3.3-70b-versatile",
-        "secret_key": "groq_api_key",
         "get_key": "https://console.groq.com/keys",
         "kind": "openai",
         "supports_json_mode": True,
@@ -52,7 +50,6 @@ PROVIDERS: Dict[str, Dict] = {
     "DeepSeek": {
         "base_url": "https://api.deepseek.com",
         "default_model": "deepseek-chat",
-        "secret_key": "deepseek_api_key",
         "get_key": "https://platform.deepseek.com/api_keys",
         "kind": "openai",
         "supports_json_mode": True,
@@ -61,7 +58,6 @@ PROVIDERS: Dict[str, Dict] = {
     "OpenAI": {
         "base_url": "https://api.openai.com/v1",
         "default_model": "gpt-4o-mini",
-        "secret_key": "openai_api_key",
         "get_key": "https://platform.openai.com/api-keys",
         "kind": "openai",
         "supports_json_mode": True,
@@ -71,7 +67,6 @@ PROVIDERS: Dict[str, Dict] = {
     "Anthropic (Claude)": {
         "base_url": "https://api.anthropic.com/v1",
         "default_model": "claude-3-5-haiku-latest",
-        "secret_key": "anthropic_api_key",
         "get_key": "https://console.anthropic.com/settings/keys",
         "kind": "anthropic",
         "supports_json_mode": False,
@@ -83,7 +78,6 @@ PROVIDERS: Dict[str, Dict] = {
     "Ollama (local, free)": {
         "base_url": "http://localhost:11434/v1",
         "default_model": "llama3.1",
-        "secret_key": None,
         "get_key": "https://ollama.com/download",
         "kind": "openai",
         "supports_json_mode": True,
