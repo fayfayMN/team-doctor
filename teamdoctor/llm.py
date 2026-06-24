@@ -76,8 +76,10 @@ PROVIDERS: Dict[str, Dict] = {
         "needs_key": True,
     },
     "Ollama (local, free)": {
+        # A bigger local model handles the JSON structuring far better than a small
+        # one. Editable in the sidebar — set it to whatever `ollama list` shows.
         "base_url": "http://localhost:11434/v1",
-        "default_model": "llama3.1",
+        "default_model": "gemma4:latest",
         "get_key": "https://ollama.com/download",
         "kind": "openai",
         "supports_json_mode": True,
