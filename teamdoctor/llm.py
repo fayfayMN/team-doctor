@@ -24,6 +24,11 @@ import requests
 TIMEOUT = 90
 LOCAL_TIMEOUT = 300
 
+# Ollama defaults to a tiny ~4k context. A description plus an uploaded file plus
+# our prompt and the JSON output easily overflows that, which truncates the JSON
+# into "no usable structure". Use a generous window via Ollama's native API.
+OLLAMA_NUM_CTX = 16384
+
 
 def _timeout_for(cfg) -> int:
     return LOCAL_TIMEOUT if "localhost" in cfg.get("base_url", "") else TIMEOUT
@@ -81,7 +86,7 @@ PROVIDERS: Dict[str, Dict] = {
         "base_url": "http://localhost:11434/v1",
         "default_model": "gemma4:latest",
         "get_key": "https://ollama.com/download",
-        "kind": "openai",
+        "kind": "ollama",
         "supports_json_mode": True,
         "needs_key": False,
     },
@@ -100,8 +105,35 @@ def chat(provider: str, model: str, api_key: str, messages: List[Dict],
     model = (model or cfg["default_model"]).strip()
     if cfg["kind"] == "anthropic":
         return _anthropic(cfg, model, api_key, messages, temperature)
+    if cfg["kind"] == "ollama":
+        return _ollama(cfg, model, messages, temperature,
+                       json_mode and cfg.get("supports_json_mode", False))
     return _openai(cfg, model, api_key, messages, temperature,
                    json_mode and cfg.get("supports_json_mode", False))
+
+
+def _ollama(cfg, model, messages, temperature, json_mode) -> str:
+    """Ollama via its NATIVE /api/chat — lets us set a large context window so a
+    long description or uploaded file doesn't overflow the default ~4k and truncate
+    the JSON. format=json reliably constrains the output to a JSON object."""
+    url = cfg["base_url"].rstrip("/").rsplit("/v1", 1)[0] + "/api/chat"
+    body = {"model": model, "messages": messages, "stream": False,
+            "options": {"num_ctx": OLLAMA_NUM_CTX, "temperature": temperature}}
+    if json_mode:
+        body["format"] = "json"
+    try:
+        r = requests.post(url, json=body, timeout=_timeout_for(cfg))
+    except requests.exceptions.ConnectionError:
+        raise LLMError(_conn_hint(cfg))
+    except requests.exceptions.Timeout:
+        raise LLMError("The local model took too long. Try a shorter description, "
+                       "or a smaller/faster Ollama model.")
+    if r.status_code != 200:
+        raise LLMError(_http_hint(r))
+    try:
+        return r.json().get("message", {}).get("content", "") or ""
+    except (KeyError, ValueError):
+        raise LLMError("Got an unexpected response shape from Ollama.")
 
 
 VISION_PROMPT = (
