@@ -294,14 +294,14 @@ def extract(provider: str, model: str, api_key: str,
     return spec
 
 
-# Signals that a named person has left or a named role is unfilled — used to keep
-# resigned/vacant people from counting as live owners (which would inflate the score).
-_DEPART_WORDS = ("resign", "stepped down", "step down", "has left", "have left",
-                 "quit", "departed", "no longer with", "no longer active", "former ")
-_VACANT_WORDS = ("vacant", "unfilled", "not yet filled", "to be filled", "to be hired",
-                 "recruiting", "recruitment", "open role", "open position", "currently open",
-                 "doesn't exist", "does not exist", "no one yet", "being recruited",
-                 "hiring", "to hire", "needs to be filled", "position is open")
+# Departure / vacancy verbs, matched ONLY when they immediately follow a person's
+# name (strict adjacency), so "Maria resigned" flags Maria but "President
+# (resigned) and VP" does NOT flag VP. Loose proximity caused exactly that bug.
+_DEPART_VERBS = (r"resign\w*", "stepped down", "step down", "quit", "quitting",
+                 "departed", "has left", "have left", r"no longer\b")
+_VACANT_VERBS = ("vacant", "unfilled", r"recruit\w*", "is open", "are open",
+                 "to be filled", "not yet filled", "needs to be filled",
+                 "doesn't exist", "does not exist", "being filled", "is empty")
 
 
 def diagnose(spec: dict) -> dict:
@@ -350,44 +350,49 @@ def diagnose(spec: dict) -> dict:
         if wid and mid and code in ("A", "R", "C", "I"):
             raci.setdefault(wid, {}).setdefault(mid, set()).add(code)
 
-    # All the free-text the user/agent gave us — used to detect who has left or
-    # which roles are unfilled, so a resigned/vacant person is never counted as a
-    # live owner (which would inflate the score).
+    # All the free-text we have — INCLUDING the user's original words (_source_text)
+    # — used to detect who has left or which roles are unfilled, so a resigned/vacant
+    # person is never counted as a live owner (which would inflate the score).
     full_text = " ".join([
+        spec.get("_source_text", "") or "",
         spec.get("summary", "") or "", spec.get("mission", "") or "",
         spec.get("root_cause", "") or "",
         " ".join(f"{i.get('issue','')} {i.get('next_step','')}"
                  for i in (spec.get("issues") or [])),
     ]).lower()
 
-    def _near_token(token: str, words: tuple, window: int = 50) -> bool:
-        tl = token.lower()
-        i = full_text.find(tl)
-        while i != -1:
-            seg = full_text[max(0, i - window): i + len(tl) + window]
-            if any(w in seg for w in words):
+    def _adjacent(name: str, verbs: tuple) -> bool:
+        """True only when a status verb IMMEDIATELY follows the name (allowing a
+        possessive and a little punctuation/aux), e.g. 'Maria resigned',
+        'Maria's resignation', 'Secretary recruitment'. Strict on purpose:
+        'President (resigned) and VP' must NOT flag VP."""
+        toks = [name.lower()]
+        parts = [p for p in name.split() if len(p) >= 3]
+        if parts:
+            toks.append(parts[0].lower())  # first name, e.g. 'maria' of 'Maria Larson'
+        gap = r"(?:'s|’s)?[\s,;:()\-]{0,3}(?:has |have |had |is |was |been |role )?"
+        alt = "|".join(verbs)
+        for t in dict.fromkeys(toks):
+            if re.search(r"\b" + re.escape(t) + gap + r"(?:" + alt + r")", full_text):
                 return True
-            i = full_text.find(tl, i + len(tl))
         return False
 
-    def _near(name: str, words: tuple, window: int = 50) -> bool:
-        """True if a signal word sits near the name OR its first/last name part,
-        so 'Maria Larson' is still caught when the text just says 'Maria resigned'."""
-        parts = [p for p in name.split() if len(p) >= 3]
-        tokens = [name] + ([parts[0], parts[-1]] if parts else [])
-        return any(_near_token(t, words, window) for t in dict.fromkeys(tokens))
-
-    departed, vacant = set(), set()
+    departed, vacant, advisors = set(), set(), set()
     for m in members:
         status = member_status.get(m.id, "active")
         if status in ("resigned", "departed", "left", "former", "gone") or \
-                _near(m.name, _DEPART_WORDS):
+                _adjacent(m.name, _DEPART_VERBS):
             departed.add(m.id)
         elif status in ("vacant", "unfilled", "open", "tbd", "empty") or \
-                _near(m.name, _VACANT_WORDS):
+                _adjacent(m.name, _VACANT_VERBS):
             vacant.add(m.id)
+        elif status == "advisor":
+            advisors.add(m.id)
     inactive = departed | vacant
-    active_members = [m for m in members if m.id not in inactive]
+    # Active = not departed/vacant and not an advisor (advisors don't count toward
+    # team size or ownership, but their areas aren't flagged "vacant").
+    active_members = [m for m in members
+                      if m.id not in inactive and m.id not in advisors]
     name_of = {m.id: m.name for m in members}
 
     # Record areas whose only Accountable owner has left/is unfilled, so the table

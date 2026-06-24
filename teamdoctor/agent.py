@@ -99,6 +99,13 @@ The skills you apply in this single pass:
   like "Transparency, Respect." It must answer the boundary questions that caused
   the trouble: what counts as a team initiative vs an individual project, and what
   needs the lead's sign-off vs what a member can do autonomously.
+  * Write rules that work with the roles that EXIST TODAY. If a role is vacant or
+    its holder has resigned (e.g. no current President), do NOT write a rule that
+    depends on that empty role ("requires President approval"). Use a currently
+    active role instead — e.g. "requires the Acting Lead's sign-off" or "agreement
+    of the active officers" — so the rule is usable now, not someday.
+  * Pick ONE notice/approval window and use it consistently everywhere (don't say
+    24 hours in one rule and 48 in another).
 - Size: for a very small team (≈4 or fewer active people), keep every
   recommendation lightweight — a shared decision log and a short weekly check-in,
   NOT quarterly OKRs, scorecards, or formal meeting systems built for big orgs.
@@ -150,6 +157,12 @@ def run(provider: str, model: str, api_key: str,
         q = data.get("follow_up") or ("Tell me a bit more — who's on the team and "
                                       "what is each person working on?")
         return {"type": "question", "text": q, "workspace": None, "skills": []}
+
+    # Carry the user's own words forward so the deterministic engine can detect
+    # departures/vacancies straight from the source (e.g. "Secretary recruitment
+    # closes June 30"), not only from the model's paraphrase.
+    data["_source_text"] = "\n".join(m.get("content", "") for m in conversation
+                                     if m.get("role") == "user")
 
     workspace, skills = doctor.build_workspace(data)
     text = (doctor.summary_text(workspace["diagnosis"])
