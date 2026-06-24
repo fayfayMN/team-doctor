@@ -641,7 +641,41 @@ def build_workspace(data: dict) -> tuple:
         data["mission"] = charter["mission"]
 
     diagnosis = diagnose(data)
-    issues = normalize_issues(data.get("issues"))
+    issues = normalize_issues(data.get("issues")) or []
+
+    # Deterministic urgent issues — the most time-critical facts (a vacated/unfilled
+    # area, a team in transition) must surface even when a weaker model writes only
+    # bland issues. Derived from the engine, not the model, so urgency is guaranteed.
+    det: List[Dict] = []
+    seen = " ".join(it["issue"].lower() for it in issues)
+    wsname = {w.id: w.name for w in diagnosis.get("workstreams", [])}
+    for wid, v in (diagnosis.get("vacancies") or {}).items():
+        area = wsname.get(wid, "An area")
+        if area.lower() in seen:
+            continue
+        sug = diagnosis.get("proposed_owners", {}).get(wid)
+        det.append({
+            "issue": f"{area} is vacant — {v['was']} ({v['reason']}) was its only owner",
+            "suggested_owner": sug or "TBD",
+            "next_step": ("Assign an interim owner now"
+                          + (f" (suggested: {sug})" if sug else "")
+                          + "; transfer accounts and any handover."),
+            "severity": "urgent"})
+    if diagnosis.get("continuity") and not any(
+            w in seen for w in ("interim", "transition", "stall", "succession",
+                                "resign", "stabil")):
+        det.append({
+            "issue": "Leadership/role is in transition — no clear succession, risk of stall",
+            "suggested_owner": "TBD",
+            "next_step": "Name an interim lead today and audit account access "
+                         "(see “Stabilize first” above).",
+            "severity": "urgent"})
+    if det:
+        issues = det + issues
+        issues.sort(key=lambda it: _SEV_RANK.get(it.get("severity", "important"), 1))
+        issues = issues[:MAX_ISSUES]
+    issues = issues or None
+
     root_cause = str(data.get("root_cause", "") or "").strip()
     trust = str(data.get("trust", "") or "").strip().lower()
     da = data.get("decision_authority") or {}
