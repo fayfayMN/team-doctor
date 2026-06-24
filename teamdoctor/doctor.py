@@ -294,6 +294,36 @@ def extract(provider: str, model: str, api_key: str,
     return spec
 
 
+# Domain affinity — general, extensible knowledge of which roles fit which areas
+# of work (a Treasurer fits Finance; a Secretary fits Documentation). Used to route
+# a vacated area to the member whose role actually matches it, instead of just the
+# least-busy person. This is universal role↔function knowledge, not case-specific —
+# add a domain here to cover a new kind of work.
+DOMAIN_KEYWORDS = {
+    "finance":      ("financ", "treasur", "budget", "fund", "money", "account",
+                     "payroll", "bookkeep", "revenue", "cash", "billing"),
+    "operations":   ("operation", " ops", "logistic", "admin", "coordinat",
+                     "president", "director", "chief", "manager"),
+    "records":      ("document", "secretar", "record", "minute", "archiv",
+                     "knowledge", "note", "wiki", "report"),
+    "marketing":    ("market", "outreach", "social", "communicat", "brand",
+                     "content", "publicity", "media"),
+    "events":       ("event", "program", "session", "workshop", "meetup",
+                     "speaker", "hospitality"),
+    "membership":   ("member", "recruit", "onboard", "volunteer", "community",
+                     "engagement", "hr", "talent", "culture"),
+    "tech":         ("tech", "engineer", "develop", "product", "platform",
+                     "software", "build", "data", "tool"),
+    "partnerships": ("sponsor", "partner", "fundrais", "donor", "sales"),
+    "design":       ("design", "creative", "graphic", "art"),
+}
+
+
+def _domains(text: str) -> set:
+    t = (text or "").lower()
+    return {d for d, kws in DOMAIN_KEYWORDS.items() if any(k in t for k in kws)}
+
+
 # Departure / vacancy verbs, matched ONLY when they immediately follow a person's
 # name (strict adjacency), so "Maria resigned" flags Maria but "President
 # (resigned) and VP" does NOT flag VP. Loose proximity caused exactly that bug.
@@ -442,24 +472,43 @@ def diagnose(spec: dict) -> dict:
     continuity = health.continuity(full_text, profile)
 
     # Proposed owners: a finding that an area has "no owner" isn't actionable on its
-    # own. For each unowned area (including a vacated one), suggest the least-loaded
-    # ACTIVE member as a starting point (a suggestion to validate, per the EOS "assign
-    # one now, even temporarily" rule). Keeps the gap visible while making it actionable.
+    # own. For each unowned area, suggest the ACTIVE member whose ROLE best fits the
+    # area (a Treasurer gets Finance), breaking ties by least current load so work
+    # spreads. A suggestion to validate, per the EOS "assign one now, even
+    # temporarily" rule. Keeps the gap visible while making it actionable.
     proposed: Dict[str, str] = {}
+    proposed_count: Dict[str, int] = {}
+    load = {m.id: 0 for m in active_members}
+    member_dom = {m.id: _domains(f"{m.role} {m.name}") for m in active_members}
+    for w in workstreams:
+        for mid, cs in clean_raci.get(w.id, {}).items():
+            if "A" in cs and mid in load:
+                load[mid] += 1
     if active_members:
-        a_load = {m.id: 0 for m in active_members}
-        for w in workstreams:
-            for mid, cs in clean_raci.get(w.id, {}).items():
-                if "A" in cs:
-                    a_load[mid] = a_load.get(mid, 0) + 1
         for w in workstreams:
             cell = clean_raci.get(w.id, {})
-            if not any("A" in cs for cs in cell.values()):
-                cand = min(active_members, key=lambda m: a_load.get(m.id, 0))
-                proposed[w.id] = cand.name
-                a_load[cand.id] = a_load.get(cand.id, 0) + 1
+            if any("A" in cs for cs in cell.values()):
+                continue
+            adom = _domains(w.name)
+            # Best fit first (role matches the area's domain), then least loaded.
+            cand = max(active_members,
+                       key=lambda m: (len(adom & member_dom[m.id]), -load[m.id]))
+            proposed[w.id] = cand.name
+            load[cand.id] += 1
+            proposed_count[cand.id] = proposed_count.get(cand.id, 0) + 1
 
     structure_notes: List[str] = []
+    # Hero-risk on the SUGGESTED state: if filling vacancies would pile too many
+    # areas on one active person, flag it (the actual-ownership overload is already
+    # flagged by the RACI check; this catches overload the suggestions would create).
+    over = raci_check.OVERLOAD_THRESHOLD
+    for m in active_members:
+        if load[m.id] > over and proposed_count.get(m.id, 0) > 0:
+            structure_notes.append(
+                f"⚠️ Taking the suggestions above would make **{m.name}** Accountable "
+                f"for {load[m.id]} areas — a single-point-of-failure risk. Treat the "
+                "vacancy-fills as TEMPORARY until you recruit, and hand at least one "
+                "area to someone else as soon as you can.")
     # Vacancy notes first — a departed/unfilled owner is a critical gap, not a clean cell.
     ws_name = {w.id: w.name for w in workstreams}
     for wid, v in vacancies.items():
