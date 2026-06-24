@@ -324,6 +324,15 @@ def _domains(text: str) -> set:
     return {d for d, kws in DOMAIN_KEYWORDS.items() if any(k in t for k in kws)}
 
 
+def _dicts(value) -> list:
+    """Keep only dict items from an AI-supplied list — tolerant of a smaller model
+    returning a non-list, or strings/None mixed in, so the engine never crashes on
+    a malformed shape."""
+    if not isinstance(value, list):
+        return []
+    return [x for x in value if isinstance(x, dict)]
+
+
 # Departure / vacancy verbs, matched ONLY when they immediately follow a person's
 # name (strict adjacency), so "Maria resigned" flags Maria but "President
 # (resigned) and VP" does NOT flag VP. Loose proximity caused exactly that bug.
@@ -342,7 +351,7 @@ def diagnose(spec: dict) -> dict:
         return (str(v) if v is not None else "").strip()
 
     members, member_status = [], {}
-    for m in spec.get("members", []):
+    for m in _dicts(spec.get("members")):
         nm = _clean(m.get("name"))
         if nm.lower() in junk:
             continue
@@ -350,7 +359,7 @@ def diagnose(spec: dict) -> dict:
         members.append(obj)
         member_status[obj.id] = (_clean(m.get("status")).lower() or "active")
     workstreams = [Workstream.create(_clean(w.get("name")), _clean(w.get("description")))
-                   for w in spec.get("workstreams", [])
+                   for w in _dicts(spec.get("workstreams"))
                    if _clean(w.get("name")).lower() not in junk]
 
     member_id = {m.name.lower(): m.id for m in members}
@@ -373,7 +382,7 @@ def diagnose(spec: dict) -> dict:
     # AND Responsible on one workstream (the natural case for a one-person task),
     # so a single code per cell would let "R" overwrite "A" and drop the owner.
     raci: Dict[str, Dict[str, set]] = {w.id: {} for w in workstreams}
-    for row in spec.get("raci", []):
+    for row in _dicts(spec.get("raci")):
         wid = _match(row.get("workstream"), ws_id)
         mid = _match(row.get("member"), member_id)
         code = _clean(row.get("code")).upper()
@@ -388,7 +397,7 @@ def diagnose(spec: dict) -> dict:
         spec.get("summary", "") or "", spec.get("mission", "") or "",
         spec.get("root_cause", "") or "",
         " ".join(f"{i.get('issue','')} {i.get('next_step','')}"
-                 for i in (spec.get("issues") or [])),
+                 for i in _dicts(spec.get("issues"))),
     ]).lower()
 
     def _adjacent(name: str, verbs: tuple) -> bool:
@@ -557,8 +566,10 @@ MAX_ISSUES = 6
 
 def normalize_charter(d: dict) -> dict:
     """Validate the charter the agent produced; None if essentially empty."""
-    d = d or {}
-    values = [str(v).strip() for v in d.get("values", []) if str(v).strip()][:MAX_VALUES]
+    d = d if isinstance(d, dict) else {}
+    raw_values = d.get("values", [])
+    raw_values = raw_values if isinstance(raw_values, list) else []
+    values = [str(v).strip() for v in raw_values if str(v).strip()][:MAX_VALUES]
     charter = {
         "mission": str(d.get("mission", "")).strip(),
         "values": values,
@@ -599,7 +610,7 @@ def normalize_issues(lst: list) -> list:
     Adds a deterministic severity and sorts most-urgent first, so the leadership
     collapse never sits visually equal to a missing-RACI note."""
     out: List[Dict] = []
-    for it in (lst or [])[:MAX_ISSUES]:
+    for it in _dicts(lst)[:MAX_ISSUES]:
         title = str(it.get("issue", "")).strip()
         if not title:
             continue

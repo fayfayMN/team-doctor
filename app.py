@@ -106,6 +106,16 @@ def run_intake(user_text: str) -> None:
             msgs.append({"role": "assistant", "content": ans})
     except llm.LLMError as e:
         msgs.append({"role": "assistant", "content": f"⚠️ {e}"})
+    except Exception as e:
+        # Never let an unexpected error end the run silently — show it instead of
+        # crashing. Smaller local models sometimes return oddly-shaped JSON; this
+        # turns that into a clear, recoverable message.
+        msgs.append({"role": "assistant", "content":
+                     "⚠️ Something went wrong turning that into a diagnosis "
+                     f"(`{type(e).__name__}`). This often means the model returned "
+                     "an unexpected shape — try again, shorten the description, or "
+                     "switch to a stronger model (e.g. DeepSeek, or a bigger Ollama "
+                     "model). The free Samples and Build-your-team paths always work."})
 
 
 def render_charter(charter: dict) -> None:
