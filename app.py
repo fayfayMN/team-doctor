@@ -32,7 +32,11 @@ with st.sidebar:
                "build-your-team form are free and need no key.")
     provider = st.selectbox("Provider", list(llm.PROVIDERS.keys()))
     cfg = llm.PROVIDERS[provider]
-    model = st.text_input("Model", value=cfg["default_model"])
+    # Key the model field by provider so switching providers resets the model to
+    # that provider's default. Without the per-provider key, Streamlit keeps the
+    # old text (e.g. a Gemini model) and the call to Ollama would 404.
+    model = st.text_input("Model", value=cfg["default_model"],
+                          key=f"model::{provider}")
 
     api_key = ""
     if cfg.get("needs_key", True):

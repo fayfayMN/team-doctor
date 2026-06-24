@@ -461,30 +461,12 @@ def diagnose(spec: dict) -> dict:
         " ".join([spec.get("team_name", "") or "", spec.get("mission", "") or "",
                   full_text]))
 
-    state = {
-        "has_charter": bool(spec.get("mission")),
-        "has_workstreams": bool(workstreams),
-        "raci_errors": raci_errors,
-        "team_size": len(active_members),
-        "profile": profile,
-        "decisions_count": 0,
-        "responses_count": 0,
-        "pulse": None,
-        "has_rocks": False,
-        "has_scorecard": False,
-        "has_issues_resolved": False,
-    }
-    coach = health.coach(state)
-    roadmap = health.roadmap(state)
-    # Crisis check: scan everything the user told us for signs of a recent
-    # departure/collapse; if found, stabilizing comes before the roadmap.
-    continuity = health.continuity(full_text, profile)
-
     # Proposed owners: a finding that an area has "no owner" isn't actionable on its
     # own. For each unowned area, suggest the ACTIVE member whose ROLE best fits the
     # area (a Treasurer gets Finance), breaking ties by least current load so work
-    # spreads. A suggestion to validate, per the EOS "assign one now, even
-    # temporarily" rule. Keeps the gap visible while making it actionable.
+    # spreads. Computed BEFORE the roadmap so the roadmap can name the team's real
+    # areas and gaps. A suggestion to validate, per the EOS "assign one now" rule.
+    ws_name = {w.id: w.name for w in workstreams}
     proposed: Dict[str, str] = {}
     proposed_count: Dict[str, int] = {}
     load = {m.id: 0 for m in active_members}
@@ -506,6 +488,31 @@ def diagnose(spec: dict) -> dict:
             load[cand.id] += 1
             proposed_count[cand.id] = proposed_count.get(cand.id, 0) + 1
 
+    # Real areas + which are unowned (with the suggested owner) — fed to the roadmap
+    # so its steps reference the team's actual work, not a generic template.
+    unowned_map = {ws_name[wid]: proposed.get(wid) for wid in proposed}
+
+    state = {
+        "has_charter": bool(spec.get("mission")),
+        "has_workstreams": bool(workstreams),
+        "raci_errors": raci_errors,
+        "team_size": len(active_members),
+        "profile": profile,
+        "areas": [w.name for w in workstreams],
+        "unowned_map": unowned_map,
+        "decisions_count": 0,
+        "responses_count": 0,
+        "pulse": None,
+        "has_rocks": False,
+        "has_scorecard": False,
+        "has_issues_resolved": False,
+    }
+    coach = health.coach(state)
+    roadmap = health.roadmap(state)
+    # Crisis check: scan everything the user told us for signs of a recent
+    # departure/collapse; if found, stabilizing comes before the roadmap.
+    continuity = health.continuity(full_text, profile)
+
     structure_notes: List[str] = []
     # Hero-risk on the SUGGESTED state: if filling vacancies would pile too many
     # areas on one active person, flag it (the actual-ownership overload is already
@@ -519,7 +526,6 @@ def diagnose(spec: dict) -> dict:
                 "vacancy-fills as TEMPORARY until you recruit, and hand at least one "
                 "area to someone else as soon as you can.")
     # Vacancy notes first — a departed/unfilled owner is a critical gap, not a clean cell.
-    ws_name = {w.id: w.name for w in workstreams}
     for wid, v in vacancies.items():
         structure_notes.append(
             f"⚠️ **{ws_name.get(wid, 'An area')}** is VACANT — {v['was']} "

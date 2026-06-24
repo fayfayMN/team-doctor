@@ -447,6 +447,30 @@ def _light_direction(profile: Dict) -> Dict:
             "Glance at them at each check-in; if one slips, it becomes the next decision."]}
 
 
+def _personalize_steps(stage: Dict, state: Dict) -> List[Dict]:
+    """Deterministically rewrite a stage's steps to name the team's REAL areas and
+    gaps — still rule-based, no model, so it can't hallucinate. Currently
+    personalizes the ownership (Accountability Chart) stage; falls back to the
+    generic template when there's nothing concrete to insert."""
+    areas = state.get("areas") or []
+    if stage["key"] != "raci" or not areas:
+        return stage["steps"]
+    unowned = state.get("unowned_map") or {}
+    steps = [
+        f"Your areas of work: {', '.join(areas)}.",
+        "Give each area ONE Accountable owner — the person who answers for it.",
+        "Name who's Responsible (does the hands-on work); it can be the same person.",
+    ]
+    if unowned:
+        parts = [f"{a} (suggest: {who})" if who else a for a, who in unowned.items()]
+        steps.append("No owner yet — assign these now: " + "; ".join(parts) + ".")
+    else:
+        steps.append("Watch the red flags above: two owners on one area, or one "
+                     "person owning too much.")
+    steps.append("Re-run this check until the structure score is 100%.")
+    return steps
+
+
 def roadmap(state: Dict) -> List[Dict]:
     """Return the path with each stage marked done / 'now' / 'next'.
 
@@ -454,6 +478,7 @@ def roadmap(state: Dict) -> List[Dict]:
     the team is now. Right-sizes for small teams — a tiny team sees a light
     decision-log step and skips the Rocks/Scorecard machinery — and the light
     'direction' stage is worded for the team's type (semester / quarter / month).
+    The ownership stage names the team's real areas and gaps.
     """
     small = state.get("team_size", 99) <= SMALL_TEAM
     profile = state.get("profile") or profile_for("")
@@ -482,5 +507,6 @@ def roadmap(state: Dict) -> List[Dict]:
         title = re.sub(r"^\s*\d+\.\s*", f"{n}. ", stage["title"])
         out.append({
             "key": stage["key"], "title": title, "status": status,
-            "what": stage["what"], "why": stage["why"], "steps": stage["steps"]})
+            "what": stage["what"], "why": stage["why"],
+            "steps": _personalize_steps(stage, state)})
     return out
