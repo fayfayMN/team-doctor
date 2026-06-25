@@ -43,7 +43,8 @@ snapshot as ONE JSON object and NOTHING else:
   "raci": [{"workstream": string, "member": string, "code": "A"|"R"|"C"|"I"}],
   "charter": {
      "mission": string, "values": [string],
-     "decision_rule": string, "communication_rule": string, "credit_rule": string },
+     "decision_rule": string, "change_rule": string,
+     "communication_rule": string, "credit_rule": string },
   "issues": [{"issue": string, "suggested_owner": string, "next_step": string}]
 }
 
@@ -104,6 +105,11 @@ The skills you apply in this single pass:
     depends on that empty role ("requires President approval"). Use a currently
     active role instead — e.g. "requires the Acting Lead's sign-off" or "agreement
     of the active officers" — so the rule is usable now, not someday.
+  * change_rule: a change-management / review-window rule — how a logged proposal
+    or decision can be revised. It must prevent unilateral reversals: e.g. "logged
+    proposals get a 48-hour written review window before direction locks; changes
+    need a written counter-proposal, not a verbal override." Use ONE consistent
+    window, matching the communication rule.
   * Pick ONE notice/approval window and use it consistently everywhere (don't say
     24 hours in one rule and 48 in another).
 - Size: for a very small team (≈4 or fewer active people), keep every

@@ -582,10 +582,20 @@ def normalize_charter(d: dict) -> dict:
         "decision_rule": str(d.get("decision_rule", "")).strip(),
         "communication_rule": str(d.get("communication_rule", "")).strip(),
         "credit_rule": str(d.get("credit_rule", "")).strip(),
+        "change_rule": str(d.get("change_rule", "")).strip(),
     }
     if not any([charter["mission"], values, charter["decision_rule"],
-                charter["communication_rule"], charter["credit_rule"]]):
+                charter["communication_rule"], charter["credit_rule"],
+                charter["change_rule"]]):
         return None
+    # A change/review-window rule is the defense against unilateral reversals
+    # (the failure that sinks teams). Always include one — a sensible default if the
+    # model didn't supply it.
+    if not charter["change_rule"]:
+        charter["change_rule"] = (
+            "Logged proposals get a 48-hour written review window before direction "
+            "locks; strategic changes need a written counter-proposal, not a verbal "
+            "override.")
     return charter
 
 
@@ -930,6 +940,7 @@ def report_html(ws: dict) -> str:
                      + "".join(f"<span class='chip'>{_esc(v)}</span>"
                                for v in charter["values"]) + "</p>")
         for key, label in (("decision_rule", "Decisions"),
+                           ("change_rule", "Change &amp; review window"),
                            ("communication_rule", "Communication"),
                            ("credit_rule", "Credit")):
             if charter.get(key):
@@ -1025,6 +1036,25 @@ def report_html(ws: dict) -> str:
                      f"<strong>{_esc(it['issue'])}</strong>"
                      f"<div class='meta'>Owner: {_esc(it['suggested_owner'])} · "
                      f"Next step: {_esc(it['next_step'])}</div></div>")
+
+    # Decision log starter — a written record is the defense against "we never
+    # agreed to that" and against quietly reversed or uncredited work.
+    s.append("<h2>🧾 Decision log (start here)</h2>")
+    s.append("<p class='sub'>Write one line every time you decide something. This is "
+             "what stops silent reversals and lost credit.</p>")
+    s.append("<table style='border-collapse:collapse;width:100%;margin:8px 0;font-size:14px'>"
+             "<thead><tr>"
+             + "".join("<th style='text-align:left;border-bottom:2px solid #ddd;"
+                       f"padding:6px'>{h}</th>"
+                       for h in ("Date", "Decision", "Owner", "Approved by", "Shared on"))
+             + "</tr></thead><tbody>")
+    example = ("2026-07-01", "Pilot the GitHub workshop", "VP",
+               "Group sign-off", "Team channel")
+    s.append("<tr>" + "".join(f"<td style='border-bottom:1px solid #eee;padding:6px'>"
+                              f"{_esc(c)}</td>" for c in example) + "</tr>")
+    s.append("<tr>" + "".join("<td style='border-bottom:1px solid #eee;padding:6px;"
+                              "height:24px'>&nbsp;</td>" for _ in range(5)) + "</tr>")
+    s.append("</tbody></table>")
 
     s.append("<footer>Built by Team Doctor. AI drafted the charter and issues; the "
              "RACI and coach findings are deterministic rules — traceable, not "

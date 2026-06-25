@@ -129,6 +129,7 @@ def render_charter(charter: dict) -> None:
     if charter.get("values"):
         st.markdown("**Values:** " + " · ".join(charter["values"]))
     rules = [("Decisions", charter.get("decision_rule")),
+             ("Change & review window", charter.get("change_rule")),
              ("Communication", charter.get("communication_rule")),
              ("Credit", charter.get("credit_rule"))]
     for label, text in rules:
