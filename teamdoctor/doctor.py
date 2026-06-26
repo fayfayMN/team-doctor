@@ -894,7 +894,7 @@ def report_html(ws: dict) -> str:
     review_by = (date.today() + timedelta(days=90)).isoformat()
     s.append(f"<h1>🩺 Team Doctor — {_esc(team)}</h1>")
     s.append(f"<p class='sub'>Generated {date.today().isoformat()} · "
-             f"📅 Review by {review_by} — revisit or this quietly dies</p>")
+             f"📅 Review by {review_by} — set a reminder so it stays current</p>")
     if diag.get("summary"):
         s.append(f"<p><em>What you described:</em> {_esc(diag['summary'])}</p>")
 

@@ -138,7 +138,7 @@ def render_charter(charter: dict) -> None:
         if text:
             st.markdown(f"**{label}:** {text}")
     review = (date.today() + timedelta(days=90)).isoformat()
-    st.caption(f"📅 Review this by {review} — an agreement no one revisits quietly dies.")
+    st.caption(f"📅 Review this by {review} — put it on the calendar so it stays current.")
 
 
 def _raci_table(diag: dict) -> list:
