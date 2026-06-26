@@ -9,8 +9,6 @@ Run locally:
     streamlit run app.py
 """
 
-from datetime import date, timedelta
-
 import streamlit as st
 
 from teamdoctor import agent, doctor, ingest, llm
@@ -137,8 +135,24 @@ def render_charter(charter: dict) -> None:
     for label, text in rules:
         if text:
             st.markdown(f"**{label}:** {text}")
-    review = (date.today() + timedelta(days=90)).isoformat()
-    st.caption(f"📅 Review this by {review} — put it on the calendar so it stays current.")
+
+
+def render_existential(ex: dict) -> None:
+    st.warning(f"🧭 {ex['title']}")
+    st.caption(ex["why"])
+    for name, desc in ex["paths"]:
+        st.markdown(f"- **{name}** — {desc}")
+    st.divider()
+
+
+def render_leader_capacity(lc: dict) -> None:
+    with st.expander(f"🫀 {lc['title']}", expanded=False):
+        st.caption(lc["why"])
+        for q in lc["questions"]:
+            st.markdown(f"- {q}")
+        st.markdown("**Self-check (both sides of the story):**")
+        for q in lc["self_check"]:
+            st.markdown(f"- {q}")
 
 
 def _raci_table(diag: dict) -> list:
@@ -179,10 +193,6 @@ def render_continuity(cont: dict) -> None:
 
 def render_diagnosis(diag: dict) -> None:
     r = diag["raci_result"]
-    # A recent collapse/resignation? Stabilizing comes before anything else.
-    if diag.get("continuity"):
-        render_continuity(diag["continuity"])
-
     st.markdown("### 🧩 Ownership (RACI)")
     if diag.get("summary"):
         st.caption(f"_What you described:_ {diag['summary']}")
@@ -293,6 +303,13 @@ def render_root_cause(ws: dict) -> None:
 
 
 def render_workspace(ws: dict) -> None:
+    diag = ws.get("diagnosis") or {}
+    # Crisis first: stabilize, then decide whether to operate at all — before any
+    # governance design.
+    if diag.get("continuity"):
+        render_continuity(diag["continuity"])
+    if diag.get("existential"):
+        render_existential(diag["existential"])
     render_root_cause(ws)
     if ws.get("charter"):
         render_charter(ws["charter"])
@@ -303,6 +320,12 @@ def render_workspace(ws: dict) -> None:
     if ws.get("issues"):
         render_issues(ws["issues"])
         st.divider()
+    if diag.get("leader_capacity"):
+        render_leader_capacity(diag["leader_capacity"])
+    if diag.get("review_by"):
+        flux = "" if diag.get("review_days", 90) >= 90 else " (short cadence — you're in flux)"
+        st.caption(f"📅 Review this whole plan by **{diag['review_by']}**{flux} — "
+                   "set a reminder so it stays current.")
     team = (ws.get("diagnosis") or {}).get("team_name", "team")
     slug = team.lower().replace(" ", "-")
     st.download_button("📄 Download this plan (HTML — opens in browser, print to PDF)",

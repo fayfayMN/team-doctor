@@ -147,6 +147,57 @@ def continuity(text: str, profile: Optional[Dict] = None) -> Optional[Dict]:
         ],
     }
 
+
+def existential_check(profile: Optional[Dict] = None) -> Dict:
+    """Before fixing governance, decide whether to keep operating at all. General to
+    any team in crisis — fixing the org chart is wasted effort if the answer is pause
+    or wind down. Deterministic: a fixed decision frame, not AI judgment."""
+    auth = (profile or profile_for(""))["authority"]
+    return {
+        "title": "Decide this first: should you keep operating right now?",
+        "why": "Before redesigning the org, be honest about whether to run at all this "
+               "period. A perfect charter is wasted effort if the real answer is pause "
+               "or wind down.",
+        "paths": [
+            ("▶ Continue (lean)",
+             "Keep only the must-dos — one owner, a decision log, a short weekly "
+             "check-in. Choose this if a core person genuinely has the bandwidth and "
+             "the basics (people, account access, eligibility) hold."),
+            ("⏸ Pause",
+             "Freeze new work; keep accounts and eligibility alive; resume next "
+             "period. Choose this if the only active person is overloaded, or a key "
+             "requirement (funding, minimum members/officers) isn't met yet."),
+            ("⏹ Wind down",
+             "Hand off accounts, archive the record, tell stakeholders cleanly. "
+             f"Choose this if no one can carry it and there's no path to meet the "
+             f"requirements — confirm the call with {auth}."),
+        ],
+    }
+
+
+def leader_capacity() -> Dict:
+    """A short, honest capacity + self-reflection check. General to any team — teams
+    break on human bandwidth, not bad org charts. Deterministic question set."""
+    return {
+        "title": "Leader capacity check (be honest)",
+        "why": "Teams break on human bandwidth, not bad org charts. Before adding "
+               "process, make sure the person carrying the most can actually carry it.",
+        "questions": [
+            "Can the person holding the most areas sustain this for the next month "
+            "without burning out or dropping commitments?",
+            "What is the MINIMUM the team can do this period without it costing that "
+            "person their other priorities (school, job, health)?",
+            "If they stepped back tomorrow, would anything critical survive? If not, "
+            "that gap is the first thing to fix.",
+        ],
+        "self_check": [
+            "Did my own pace or volume of output overwhelm a lower-context teammate?",
+            "Could *how* I delivered feedback — not just whether it was right — have "
+            "damaged trust?",
+        ],
+    }
+
+
 QUESTIONS: List[Dict] = [
     {"id": "safety",        "dimension": "Psychological safety",
      "text": "I can raise problems, mistakes, or tough issues without fear of blame."},

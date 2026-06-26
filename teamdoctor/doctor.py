@@ -537,16 +537,41 @@ def diagnose(spec: dict) -> dict:
     # The suggested tiebreaker adapts to the team type (advisor / board / owner / …).
     authority = profile.get("authority", "a designated senior lead")
     n = len(active_members)
-    if 0 < n <= 3:
+    if n == 1:
         structure_notes.append(
-            f"⚖️ With only {n} active decision-maker{'s' if n != 1 else ''}, a "
-            "majority-vote rule can deadlock (a tie with no resolver). Name "
-            f"{authority} as the tiebreaker for tied votes — so a disagreement can't "
-            "stall the team the way it did before.")
+            f"⚖️ With only 1 active decision-maker, there's no check on decisions and "
+            "no one to share the call. Name "
+            f"{authority} to sign off on anything strategic, and a rule like "
+            "'agreement of all active officers' becomes circular — replace it with "
+            f"'{authority} consultation' until a second decision-maker is in place.")
+    elif 1 < n <= 3:
+        structure_notes.append(
+            f"⚖️ With only {n} active decision-makers, a majority-vote rule can "
+            f"deadlock (a tie with no resolver). Name {authority} as the tiebreaker "
+            "for tied votes — so a disagreement can't stall the team.")
     elif n >= 4 and n % 2 == 0:
         structure_notes.append(
             f"⚖️ With an even number of voters ({n}), a majority-vote rule can tie. "
             f"Name {authority} as the tiebreaker so decisions don't stall.")
+
+    # Review cadence scales with how much flux the team is in — a team in crisis
+    # shouldn't wait 90 days to revisit. Deterministic from the engine's own state.
+    overloaded = any("single point of failure" in f["msg"] for f in raci_result["findings"])
+    if continuity:
+        review_days = 14
+    elif raci_errors:
+        review_days = 30
+    else:
+        review_days = 90
+    review_by = (date.today() + timedelta(days=review_days)).isoformat()
+
+    # Crisis → decide whether to operate at all, before fixing governance.
+    # Capacity matters whenever someone is overloaded, the team is in crisis, or it's
+    # tiny — the situations where human bandwidth is the real constraint.
+    existential = health.existential_check(profile) if continuity else None
+    leader_capacity = (health.leader_capacity()
+                       if (overloaded or continuity or len(active_members) <= 2)
+                       else None)
 
     return {
         "members": active_members,
@@ -559,6 +584,10 @@ def diagnose(spec: dict) -> dict:
         "coach": coach,
         "roadmap": roadmap,
         "continuity": continuity,
+        "existential": existential,
+        "leader_capacity": leader_capacity,
+        "review_days": review_days,
+        "review_by": review_by,
         "team_size": len(active_members),
         "team_name": (spec.get("team_name") or "Your team").strip(),
         "mission": spec.get("mission", ""),
@@ -593,9 +622,12 @@ def normalize_charter(d: dict) -> dict:
     # model didn't supply it.
     if not charter["change_rule"]:
         charter["change_rule"] = (
-            "Logged proposals get a 48-hour written review window before direction "
-            "locks; strategic changes need a written counter-proposal, not a verbal "
-            "override.")
+            "Routine/operational actions (reminders, day-of posts) need no review. "
+            "New or public-facing (strategic) initiatives get a logged proposal and a "
+            "48-hour review window before they lock; changing a locked decision needs "
+            "a written counter-proposal, not a verbal override. When fewer than two "
+            "active decision-makers are available to review, your designated approver "
+            "(advisor, board, or owner) signs off instead.")
     return charter
 
 
@@ -891,10 +923,11 @@ def report_html(ws: dict) -> str:
              "@media print{body{margin:0}}"
              "</style></head><body>")
 
-    review_by = (date.today() + timedelta(days=90)).isoformat()
+    review_by = diag.get("review_by") or (date.today() + timedelta(days=90)).isoformat()
+    flux = "" if diag.get("review_days", 90) >= 90 else " (short cadence — high flux)"
     s.append(f"<h1>🩺 Team Doctor — {_esc(team)}</h1>")
     s.append(f"<p class='sub'>Generated {date.today().isoformat()} · "
-             f"📅 Review by {review_by} — set a reminder so it stays current</p>")
+             f"📅 Review by {review_by}{flux} — set a reminder so it stays current</p>")
     if diag.get("summary"):
         s.append(f"<p><em>What you described:</em> {_esc(diag['summary'])}</p>")
 
@@ -908,6 +941,16 @@ def report_html(ws: dict) -> str:
         s.append("<ul style='margin:6px 0'>"
                  + "".join(f"<li>{_esc(step)}</li>" for step in cont["steps"])
                  + "</ul></div>")
+
+    ex = diag.get("existential")
+    if ex:
+        s.append("<div style='border:1px solid #854F0B;background:#FAEEDA;"
+                 "border-radius:8px;padding:12px 16px;margin:14px 0'>")
+        s.append(f"<h2 style='border:none;margin:0 0 6px;color:#854F0B'>🧭 "
+                 f"{_esc(ex['title'])}</h2>")
+        s.append(f"<p style='margin:2px 0'>{_esc(ex['why'])}</p><ul style='margin:6px 0'>"
+                 + "".join(f"<li><strong>{_esc(n)}</strong> — {_esc(d)}</li>"
+                           for n, d in ex["paths"]) + "</ul></div>")
 
     rc = (ws.get("root_cause") or "").strip()
     da = ws.get("decision_authority")
@@ -1038,6 +1081,15 @@ def report_html(ws: dict) -> str:
                      f"<strong>{_esc(it['issue'])}</strong>"
                      f"<div class='meta'>Owner: {_esc(it['suggested_owner'])} · "
                      f"Next step: {_esc(it['next_step'])}</div></div>")
+
+    lc = diag.get("leader_capacity")
+    if lc:
+        s.append(f"<h2>🫀 {_esc(lc['title'])}</h2>")
+        s.append(f"<p class='sub'>{_esc(lc['why'])}</p><ul>"
+                 + "".join(f"<li>{_esc(q)}</li>" for q in lc["questions"]) + "</ul>")
+        s.append("<p style='margin:6px 0 2px'><strong>Self-check (both sides of the "
+                 "story):</strong></p><ul>"
+                 + "".join(f"<li>{_esc(q)}</li>" for q in lc["self_check"]) + "</ul>")
 
     # Decision log starter — a written record is the defense against "we never
     # agreed to that" and against quietly reversed or uncredited work.
