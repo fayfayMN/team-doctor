@@ -9,6 +9,8 @@ Run locally:
     streamlit run app.py
 """
 
+from datetime import date, timedelta
+
 import streamlit as st
 
 from teamdoctor import agent, doctor, ingest, llm
@@ -135,6 +137,8 @@ def render_charter(charter: dict) -> None:
     for label, text in rules:
         if text:
             st.markdown(f"**{label}:** {text}")
+    review = (date.today() + timedelta(days=90)).isoformat()
+    st.caption(f"📅 Review this by {review} — an agreement no one revisits quietly dies.")
 
 
 def _raci_table(diag: dict) -> list:

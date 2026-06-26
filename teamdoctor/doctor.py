@@ -12,7 +12,7 @@ finding, so the "explainable, can't hallucinate" promise holds.
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, timedelta
 from typing import Dict, List
 
 from teamdoctor import health, llm
@@ -891,8 +891,10 @@ def report_html(ws: dict) -> str:
              "@media print{body{margin:0}}"
              "</style></head><body>")
 
+    review_by = (date.today() + timedelta(days=90)).isoformat()
     s.append(f"<h1>🩺 Team Doctor — {_esc(team)}</h1>")
-    s.append(f"<p class='sub'>Generated {date.today().isoformat()}</p>")
+    s.append(f"<p class='sub'>Generated {date.today().isoformat()} · "
+             f"📅 Review by {review_by} — revisit or this quietly dies</p>")
     if diag.get("summary"):
         s.append(f"<p><em>What you described:</em> {_esc(diag['summary'])}</p>")
 
