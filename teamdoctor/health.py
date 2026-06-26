@@ -152,7 +152,7 @@ def existential_check(profile: Optional[Dict] = None) -> Dict:
     """Before fixing governance, decide whether to keep operating at all. General to
     any team in crisis — fixing the org chart is wasted effort if the answer is pause
     or wind down. Deterministic: a fixed decision frame, not AI judgment."""
-    auth = (profile or profile_for(""))["authority"]
+    auth = (profile or profile_for("")).get("authority", "a designated lead or advisor")
     return {
         "title": "Decide this first: should you keep operating right now?",
         "why": "Before redesigning the org, be honest about whether to run at all this "

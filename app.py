@@ -138,21 +138,24 @@ def render_charter(charter: dict) -> None:
 
 
 def render_existential(ex: dict) -> None:
-    st.warning(f"🧭 {ex['title']}")
-    st.caption(ex["why"])
-    for name, desc in ex["paths"]:
+    st.warning(f"🧭 {ex.get('title', 'Decide whether to keep operating')}")
+    if ex.get("why"):
+        st.caption(ex["why"])
+    for name, desc in ex.get("paths", []):
         st.markdown(f"- **{name}** — {desc}")
     st.divider()
 
 
 def render_leader_capacity(lc: dict) -> None:
-    with st.expander(f"🫀 {lc['title']}", expanded=False):
-        st.caption(lc["why"])
-        for q in lc["questions"]:
+    with st.expander(f"🫀 {lc.get('title', 'Leader capacity check')}", expanded=False):
+        if lc.get("why"):
+            st.caption(lc["why"])
+        for q in lc.get("questions", []):
             st.markdown(f"- {q}")
-        st.markdown("**Self-check (both sides of the story):**")
-        for q in lc["self_check"]:
-            st.markdown(f"- {q}")
+        if lc.get("self_check"):
+            st.markdown("**Self-check (both sides of the story):**")
+            for q in lc["self_check"]:
+                st.markdown(f"- {q}")
 
 
 def _raci_table(diag: dict) -> list:
