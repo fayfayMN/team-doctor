@@ -1050,10 +1050,11 @@ def report_html(ws: dict) -> str:
                        f"padding:6px'>{h}</th>"
                        for h in ("Date", "Decision", "Owner", "Approved by", "Shared on"))
              + "</tr></thead><tbody>")
-    example = ("2026-07-01", "Pilot the GitHub workshop", "VP",
-               "Group sign-off", "Team channel")
-    s.append("<tr>" + "".join(f"<td style='border-bottom:1px solid #eee;padding:6px'>"
-                              f"{_esc(c)}</td>" for c in example) + "</tr>")
+    example = (date.today().isoformat(), "(example) the decision you made",
+               "(owner)", "(who signed off)", "(where you shared it)")
+    s.append("<tr style='color:#999;font-style:italic'>"
+             + "".join(f"<td style='border-bottom:1px solid #eee;padding:6px'>"
+                       f"{_esc(c)}</td>" for c in example) + "</tr>")
     s.append("<tr>" + "".join("<td style='border-bottom:1px solid #eee;padding:6px;"
                               "height:24px'>&nbsp;</td>" for _ in range(5)) + "</tr>")
     s.append("</tbody></table>")
