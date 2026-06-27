@@ -55,6 +55,31 @@ STYLES: List[Dict] = [
 
 _BY_KEY: Dict[str, Dict] = {s["key"]: s for s in STYLES}
 
+# ── Communication directness ─────────────────────────────────────────────────
+# How directly team members express themselves — a cultural/interpersonal layer
+# that complements the async/sync channel choice. No recommendation engine here;
+# it's a pure preference. The Asana "how people prefer to receive information"
+# model (bottom-line-first / big-picture-first / process-first / relationship-first)
+# maps loosely onto this spectrum — but for team formation, a simple 3-point
+# scale is more actionable than a 4-style matrix.
+DIRECTNESS: List[Dict] = [
+    {"key": "direct",
+     "name": "Direct — say what you mean",
+     "detail": "Explicit asks, direct feedback, no reading between the lines. "
+               "\"This needs to change.\" \"I disagree because…\" Faster, but can "
+               "feel blunt to indirect communicators."},
+    {"key": "balanced",
+     "name": "Balanced — direct on facts, softer on people",
+     "detail": "Clear on deadlines and deliverables; gentler on interpersonal "
+               "feedback. \"The deadline moved to Friday. On the approach — have "
+               "you considered…?\" Default for most teams."},
+    {"key": "indirect",
+     "name": "Indirect — suggestions over demands",
+     "detail": "Context before conclusion; preserve harmony. \"Have you thought "
+               "about…?\" instead of \"Do this.\" Direct communicators may miss "
+               "the signal; indirect communicators feel respected."},
+]
+
 # Above this head-count, even a small-team default tips toward async-first: more
 # people means a meeting can't include everyone and a written channel wins.
 SMALL_TEAM_MAX = 6
