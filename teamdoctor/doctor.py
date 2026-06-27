@@ -1085,7 +1085,7 @@ def report_html(ws: dict) -> str:
         s.append("<h2>🧩 Ownership (RACI)</h2>")
         s.append(f"<div class='score'>{round(r['score'] * 100)}%"
                  "<span style='font-size:14px;color:#888'> structure score "
-                 "(structural completeness only — risks flagged below)</span></div>")
+                 "(ownership structure + distribution — risks flagged below)</span></div>")
         # The table behind the score — never show the number without the content.
         mname = {m.id: m.name for m in diag.get("members", [])}
         proposed = diag.get("proposed_owners", {})
