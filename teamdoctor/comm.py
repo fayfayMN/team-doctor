@@ -158,14 +158,42 @@ def detect_current(text: str) -> Optional[str]:
     return None
 
 
+# ── Detect directness from text ────────────────────────────────────────────
+# This is harder to detect than channel style — directness is interpersonal,
+# not tooling. The keyword hints are weaker and should be treated as a gentle
+# signal, not a confident diagnosis.
+_DIRECT_HINTS = ("direct", "blunt", "frank", "explicit", "straightforward",
+                 "say what", "bottom line", "no sugar", "candid", "bluntly")
+_INDIRECT_HINTS = ("indirect", "diplomatic", "hint", "read between",
+                   "context first", "harmony", "polite", "gentle", "soft",
+                   "suggest", "imply", "nuance", "tactful")
+
+
+def detect_directness(text: str) -> Optional[str]:
+    """Infer the team's directness from how they describe themselves. None when
+    there's no clear signal. Biased toward None (don't guess) because the signal
+    is weaker than for channel style."""
+    t = (text or "").lower()
+    direct_hit = any(w in t for w in _DIRECT_HINTS)
+    indirect_hit = any(w in t for w in _INDIRECT_HINTS)
+    if direct_hit and not indirect_hit:
+        return "direct"
+    if indirect_hit and not direct_hit:
+        return "indirect"
+    if direct_hit and indirect_hit:
+        return "balanced"  # both signals → probably balanced
+    return None
+
+
 def assess(text: str, kind: str, size: int, in_crisis: bool = False) -> Dict:
-    """Full communication-style read for a team: what they seem to do now, the
-    risk in that, and what to do instead — all deterministic."""
+    """Full communication-style read for a team: what they seem to do today, the
+    risk in that, what to do instead, and their likely directness — all deterministic."""
     rec_key, why = recommend(kind, size, in_crisis)
     current = detect_current(text)
     current_risk = None
     if current and current != rec_key and current in ("ad_hoc", "sync_meetings"):
         current_risk = style(current)["watch_out"]
+    directness_key = detect_directness(text)
     return {
         "recommended": rec_key,
         "name": style(rec_key)["name"],
@@ -174,4 +202,12 @@ def assess(text: str, kind: str, size: int, in_crisis: bool = False) -> Dict:
         "current_name": style(current)["name"] if current else None,
         "current_risk": current_risk,
         "styles": STYLES,
+        "directness": directness_key,
+        "directness_name": next((d["name"] for d in DIRECTNESS
+                                 if d["key"] == directness_key), None)
+                         if directness_key else None,
+        "directness_detail": next((d["detail"] for d in DIRECTNESS
+                                   if d["key"] == directness_key), None)
+                           if directness_key else None,
+        "directness_spectrum": DIRECTNESS,
     }

@@ -1059,6 +1059,27 @@ def report_html(ws: dict) -> str:
                      f"<td style='border-bottom:1px solid #eee;padding:6px'>{_esc(st_['scales'])}</td></tr>")
         s.append("</tbody></table>")
 
+        # ── Directness: interpersonal layer under the channel choice ──────────
+        if cs.get("directness"):
+            s.append(
+                "<p style='background:#E8F5E9;border-radius:6px;padding:8px 12px;"
+                "margin-top:10px'>"
+                f"<strong>Detected directness: {_esc(cs['directness_name'])}</strong>"
+                f" — {_esc(cs.get('directness_detail', ''))}</p>")
+        else:
+            s.append(
+                "<p style='background:#f5f5f5;border-radius:6px;padding:8px 12px;"
+                "margin-top:10px'>"
+                "<strong>💡 Directness not detected.</strong> Same channel, different "
+                "tone — agreeing on how directly people speak prevents the #1 "
+                "interpersonal friction. Consider picking one during kickoff:</p>")
+        # Always show the spectrum so the team can discuss it.
+        ds_items = []
+        for d in cs.get("directness_spectrum", comm.DIRECTNESS):
+            ds_items.append(f"<strong>{_esc(d['name'])}</strong>: {_esc(d['detail'])}")
+        s.append("<ul style='margin:4px 0;font-size:14px'><li>"
+                 + "</li><li>".join(ds_items) + "</li></ul>")
+
     if diag:
         r = diag["raci_result"]
         s.append("<h2>🧩 Ownership (RACI)</h2>")
