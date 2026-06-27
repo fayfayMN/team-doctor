@@ -86,14 +86,28 @@ def check(raci: Dict, workstreams: List, members: List) -> Dict:
                              "msg": f"**{m.name}** has no role on any workstream — "
                                     "uninvolved members drift toward free-riding."})
 
-    # ── Score: fraction of workstreams with a clean ownership structure ───────
+    # ── Score: structural completeness × ownership distribution ────────────
+    # Per-workstream: each area needs exactly 1 Accountable + at least 1 Responsible.
     clean = 0
     for w in workstreams:
         a = [cs for cs in _assignments_for(raci, w.id).values() if "A" in cs]
         r = [cs for cs in _assignments_for(raci, w.id).values() if "R" in cs]
         if len(a) == 1 and len(r) >= 1:
             clean += 1
-    score = round(clean / len(workstreams), 2)
+    structural = clean / len(workstreams)
+
+    # Distribution: when one person owns everything across multiple workstreams,
+    # it's a solo operation, not a team. Score it accordingly.
+    distinct_a = len([m for m, n in a_count.items() if n > 0])
+    if distinct_a <= 1 and len(workstreams) > 1:
+        score = 0.0
+        findings.append({"level": "error",
+                         "msg": "One person is Accountable for every workstream — "
+                                "this is a solo operation, not a team. Spread "
+                                "ownership across at least two people before the "
+                                "structure can be scored."})
+    else:
+        score = round(structural, 2)
 
     errors = sum(1 for f in findings if f["level"] == "error")
     if errors:
