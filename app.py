@@ -64,17 +64,24 @@ with st.sidebar:
     st.session_state.setdefault("headroom_enabled", False)
     st.session_state.setdefault("headroom_mode", "library")
 
-    use_compression = st.checkbox(
-        "Enable Headroom compression",
-        value=st.session_state.headroom_enabled,
-        help="Compresses messages before sending to the LLM. Requires "
-             "`pip install \"headroom-ai[ml]\"` (~500 MB one-time model "
-             "download on first use, then cached on disk).")
-    st.session_state.headroom_enabled = use_compression
+    # Always check availability fresh — never cache a failure, so installing
+    # headroom and refreshing the page picks it up immediately.
+    try:
+        import headroom as _hr  # noqa: F401
+        _headroom_ok = True
+    except ImportError:
+        _headroom_ok = False
 
-    if use_compression:
-        if llm._check_headroom():
-            st.success("✅ Headroom is installed.")
+    if _headroom_ok:
+        st.success("✅ Headroom is installed.")
+        use_compression = st.checkbox(
+            "Enable Headroom compression",
+            value=st.session_state.headroom_enabled,
+            help="Compresses messages before sending to the LLM. "
+                 "Cuts token usage 47–92% on agent workloads.")
+        st.session_state.headroom_enabled = use_compression
+
+        if use_compression:
             comp_mode = st.radio(
                 "Compression mode",
                 ["Library (in-process)", "Proxy (localhost:8787)"],
@@ -97,15 +104,15 @@ with st.sidebar:
                 except ValueError:
                     st.warning("Port must be a number. Using default 8787.")
                     st.session_state.headroom_proxy_port = 8787
-        else:
-            st.info(
-                "Headroom is not installed. LLM features work without it — "
-                "compression just helps long conversations fit in the model's "
-                "context window. To enable: "
-                "`pip install \"headroom-ai[ml]\"` (~500 MB one-time download), "
-                "then restart the app."
-            )
-            st.session_state.headroom_enabled = False
+    else:
+        st.info(
+            "Headroom is not installed. LLM features work without it — "
+            "compression just helps long conversations fit in the model's "
+            "context window. To enable: "
+            "`pip install \"headroom-ai[ml]\"` (~500 MB one-time download), "
+            "then refresh this page."
+        )
+        st.session_state.headroom_enabled = False
 
     st.divider()
     st.caption("How it works: the health check (RACI + EOS coach) is pure "

@@ -45,10 +45,12 @@ _headroom_compress = None
 
 
 def _check_headroom() -> bool:
-    """Lazy import guard for headroom. Returns True if installed and importable."""
+    """Lazy import guard for headroom. Returns True if installed and importable.
+    Caches success (once it works, no need to re-import) but retries on failure
+    — so installing headroom and refreshing picks it up without a full restart."""
     global _headroom_available, _headroom_compress
-    if _headroom_available is not None:
-        return _headroom_available
+    if _headroom_available:
+        return True  # cached success — don't re-import
     try:
         from headroom import compress as _c
         _headroom_compress = _c
