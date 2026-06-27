@@ -15,7 +15,7 @@ import re
 from datetime import date, timedelta
 from typing import Dict, List
 
-from teamdoctor import health, llm
+from teamdoctor import comm, health, llm
 from teamdoctor import raci as raci_check
 from teamdoctor.models import Member, Workstream
 
@@ -578,6 +578,11 @@ def diagnose(spec: dict) -> dict:
                        if (overloaded or continuity or len(active_members) <= 2)
                        else None)
 
+    # Communication style: detect how they seem to work today, name the risk in it,
+    # and recommend the best fit for this team type/size/crisis — all deterministic.
+    comm_style = comm.assess(full_text, profile.get("kind", "team"),
+                             len(active_members), bool(continuity))
+
     return {
         "members": active_members,
         "workstreams": workstreams,
@@ -593,6 +598,7 @@ def diagnose(spec: dict) -> dict:
         "leader_capacity": leader_capacity,
         "review_days": review_days,
         "review_by": review_by,
+        "comm_style": comm_style,
         "team_size": len(active_members),
         "team_name": (spec.get("team_name") or "Your team").strip(),
         "mission": spec.get("mission", ""),
@@ -1024,6 +1030,34 @@ def report_html(ws: dict) -> str:
             if charter.get(key):
                 s.append(f"<p class='rule'><strong>{label}:</strong> "
                          f"{_esc(charter[key])}</p>")
+
+    cs = (diag or {}).get("comm_style")
+    if cs:
+        s.append("<h2>📡 Communication style</h2>")
+        if cs.get("current_risk") and cs.get("current_name"):
+            s.append("<p style='background:#FAEEDA;border-radius:6px;padding:8px 12px'>"
+                     f"Looks like a lot happens <strong>{_esc(cs['current_name'].lower())}"
+                     f"</strong> — that risks: {_esc(cs['current_risk'])}</p>")
+        s.append("<p style='background:#E8F5E9;border-radius:6px;padding:8px 12px'>"
+                 f"<strong>Recommended: {_esc(cs.get('name', 'Hybrid'))}</strong> — "
+                 f"{_esc(cs.get('why', ''))}</p>")
+        s.append("<table style='border-collapse:collapse;width:100%;margin:8px 0;"
+                 "font-size:14px'><thead><tr>"
+                 "<th style='text-align:left;border-bottom:2px solid #ddd;padding:6px'>Style</th>"
+                 "<th style='text-align:left;border-bottom:2px solid #ddd;padding:6px'>Speed</th>"
+                 "<th style='text-align:left;border-bottom:2px solid #ddd;padding:6px'>Leaves a record</th>"
+                 "<th style='text-align:left;border-bottom:2px solid #ddd;padding:6px'>Scales</th>"
+                 "</tr></thead><tbody>")
+        for st_ in cs.get("styles", []):
+            hit = (st_["key"] == cs.get("recommended"))
+            bg = "background:#E8F5E9;" if hit else ""
+            nm = (("✅ " if hit else "") + st_["name"])
+            s.append(f"<tr style='{bg}'>"
+                     f"<td style='border-bottom:1px solid #eee;padding:6px'>{_esc(nm)}</td>"
+                     f"<td style='border-bottom:1px solid #eee;padding:6px'>{_esc(st_['speed'])}</td>"
+                     f"<td style='border-bottom:1px solid #eee;padding:6px'>{_esc(st_['record'])}</td>"
+                     f"<td style='border-bottom:1px solid #eee;padding:6px'>{_esc(st_['scales'])}</td></tr>")
+        s.append("</tbody></table>")
 
     if diag:
         r = diag["raci_result"]

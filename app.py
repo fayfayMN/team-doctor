@@ -56,6 +56,55 @@ with st.sidebar:
                    "the cloud).")
 
     st.divider()
+    st.subheader("🗜️ Context compression")
+    st.caption("Makes long conversations and large descriptions fit in the model's "
+               "context window — cuts token usage 47–92% on agent workloads, so "
+               "local and free-tier models stay viable for more turns.")
+
+    st.session_state.setdefault("headroom_enabled", False)
+    st.session_state.setdefault("headroom_mode", "library")
+
+    use_compression = st.checkbox(
+        "Enable Headroom compression",
+        value=st.session_state.headroom_enabled,
+        help="Compresses messages before sending to the LLM. Requires "
+             "`pip install \"headroom-ai[ml]\"` (~500 MB one-time model "
+             "download on first use, then cached on disk).")
+    st.session_state.headroom_enabled = use_compression
+
+    if use_compression:
+        try:
+            import headroom as _hr  # noqa: F401
+            st.success("✅ Headroom is installed.")
+            comp_mode = st.radio(
+                "Compression mode",
+                ["Library (in-process)", "Proxy (localhost:8787)"],
+                index=0 if st.session_state.headroom_mode == "library" else 1,
+                help="Library: compress in-process, works with all providers. "
+                     "Proxy: route through a local Headroom proxy — faster but "
+                     "only for OpenAI-format providers (Gemini, Groq, DeepSeek, "
+                     "OpenAI). Start proxy first: `headroom proxy --port 8787`")
+            st.session_state.headroom_mode = (
+                "library" if "Library" in comp_mode else "proxy")
+
+            if st.session_state.headroom_mode == "proxy":
+                st.session_state.setdefault("headroom_proxy_port", 8787)
+                proxy_port = st.text_input(
+                    "Proxy port", value=str(st.session_state.headroom_proxy_port),
+                    help="Port the Headroom proxy is running on. "
+                         "Start it with: `headroom proxy --port PORT`")
+                try:
+                    st.session_state.headroom_proxy_port = int(proxy_port)
+                except ValueError:
+                    st.warning("Port must be a number. Using default 8787.")
+                    st.session_state.headroom_proxy_port = 8787
+        except ImportError:
+            st.warning("⚠️ Headroom not installed. Run: "
+                       "`pip install \"headroom-ai[ml]\"` then restart the app. "
+                       "Compression disabled for now.")
+            st.session_state.headroom_enabled = False
+
+    st.divider()
     st.caption("How it works: the health check (RACI + EOS coach) is pure "
                "deterministic logic — free, no key, can't hallucinate. The AI "
                "option only turns a paragraph into structure, using your own key.")
@@ -97,16 +146,25 @@ def run_intake(user_text: str) -> None:
     once a workspace exists, follow-ups are grounded Q&A on everything built."""
     msgs = st.session_state.messages
     msgs.append({"role": "user", "content": user_text})
+    use_comp = st.session_state.get("headroom_enabled", False)
+    comp_mode = st.session_state.get("headroom_mode", "library")
+    proxy_port = st.session_state.get("headroom_proxy_port", 8787)
     try:
         if not _has_content(st.session_state.workspace):
-            result = agent.run(provider, model, api_key, msgs)
+            result = agent.run(provider, model, api_key, msgs,
+                               use_compression=use_comp,
+                               compression_mode=comp_mode,
+                               proxy_port=proxy_port)
             st.session_state.skills = result.get("skills", [])
             if _has_content(result.get("workspace")):
                 st.session_state.workspace = result["workspace"]
             msgs.append({"role": "assistant", "content": result["text"]})
         else:
             ans = doctor.answer(provider, model, api_key,
-                                st.session_state.workspace, msgs)
+                                st.session_state.workspace, msgs,
+                                use_compression=use_comp,
+                                compression_mode=comp_mode,
+                                proxy_port=proxy_port)
             msgs.append({"role": "assistant", "content": ans})
     except llm.LLMError as e:
         msgs.append({"role": "assistant", "content": f"⚠️ {e}"})
@@ -114,9 +172,11 @@ def run_intake(user_text: str) -> None:
         # Never let an unexpected error end the run silently — show it instead of
         # crashing. Smaller local models sometimes return oddly-shaped JSON; this
         # turns that into a clear, recoverable message.
+        import traceback
+        traceback.print_exc()
         msgs.append({"role": "assistant", "content":
                      "⚠️ Something went wrong turning that into a diagnosis "
-                     f"(`{type(e).__name__}`). This often means the model returned "
+                     f"(`{type(e).__name__}: {e}`). This often means the model returned "
                      "an unexpected shape — try again, shorten the description, or "
                      "switch to a stronger model (e.g. DeepSeek, or a bigger Ollama "
                      "model). The free Samples and Build-your-team paths always work."})
@@ -135,6 +195,20 @@ def render_charter(charter: dict) -> None:
     for label, text in rules:
         if text:
             st.markdown(f"**{label}:** {text}")
+
+
+def render_comm_style(cs: dict) -> None:
+    st.markdown("### 📡 Communication style")
+    if cs.get("current_risk") and cs.get("current_name"):
+        st.warning(f"Looks like a lot happens **{cs['current_name'].lower()}** — that "
+                   f"risks: {cs['current_risk']}")
+    st.success(f"**Recommended: {cs.get('name', 'Hybrid')}** — {cs.get('why', '')}")
+    with st.expander("📊 Compare all 4 styles"):
+        st.table([
+            {"Style": s["name"], "Speed": s["speed"], "Leaves a record": s["record"],
+             "Who's included": s["inclusion"], "Scales": s["scales"]}
+            for s in cs.get("styles", [])
+        ])
 
 
 def render_existential(ex: dict) -> None:
@@ -316,6 +390,9 @@ def render_workspace(ws: dict) -> None:
     render_root_cause(ws)
     if ws.get("charter"):
         render_charter(ws["charter"])
+        st.divider()
+    if diag.get("comm_style"):
+        render_comm_style(diag["comm_style"])
         st.divider()
     if ws.get("diagnosis"):
         render_diagnosis(ws["diagnosis"])
