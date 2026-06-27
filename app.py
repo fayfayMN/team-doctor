@@ -73,8 +73,7 @@ with st.sidebar:
     st.session_state.headroom_enabled = use_compression
 
     if use_compression:
-        try:
-            import headroom as _hr  # noqa: F401
+        if llm._check_headroom():
             st.success("✅ Headroom is installed.")
             comp_mode = st.radio(
                 "Compression mode",
@@ -98,10 +97,14 @@ with st.sidebar:
                 except ValueError:
                     st.warning("Port must be a number. Using default 8787.")
                     st.session_state.headroom_proxy_port = 8787
-        except ImportError:
-            st.warning("⚠️ Headroom not installed. Run: "
-                       "`pip install \"headroom-ai[ml]\"` then restart the app. "
-                       "Compression disabled for now.")
+        else:
+            st.info(
+                "Headroom is not installed. LLM features work without it — "
+                "compression just helps long conversations fit in the model's "
+                "context window. To enable: "
+                "`pip install \"headroom-ai[ml]\"` (~500 MB one-time download), "
+                "then restart the app."
+            )
             st.session_state.headroom_enabled = False
 
     st.divider()
