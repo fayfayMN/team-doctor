@@ -1,6 +1,8 @@
-# Updated 2026-06-24 — bump to force a clean Streamlit Cloud rebuild
+# Updated 2026-06-26 — bump to force a clean Streamlit Cloud rebuild
 # (hot-reload alone does not reimport the teamdoctor/* modules).
 streamlit>=1.50
 requests>=2.31
 pypdf>=4.0
 python-docx>=1.1
+# Optional context compression (~500 MB model download on first use):
+# headroom-ai[ml]>=0.27

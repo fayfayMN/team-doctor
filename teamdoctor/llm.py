@@ -15,6 +15,7 @@ from __future__ import annotations
 import base64
 import json
 import re
+import traceback
 from typing import Dict, List, Optional
 
 import requests
@@ -32,6 +33,50 @@ OLLAMA_NUM_CTX = 16384
 
 def _timeout_for(cfg) -> int:
     return LOCAL_TIMEOUT if "localhost" in cfg.get("base_url", "") else TIMEOUT
+
+
+# ── Headroom context compression (optional) ──────────────────────────────────
+# Headroom cuts token usage 47-92% on agent workloads. It's ~500 MB on first use
+# (downloads the Kompress model from HuggingFace), cached on disk after that.
+# The app degrades gracefully if it isn't installed.
+
+_headroom_available: Optional[bool] = None
+_headroom_compress = None
+
+
+def _check_headroom() -> bool:
+    """Lazy import guard for headroom. Returns True if installed and importable."""
+    global _headroom_available, _headroom_compress
+    if _headroom_available is not None:
+        return _headroom_available
+    try:
+        from headroom import compress as _c
+        _headroom_compress = _c
+        _headroom_available = True
+    except ImportError:
+        _headroom_available = False
+        _headroom_compress = False  # sentinel: tried and failed
+    return _headroom_available
+
+
+def _compress_ref(model: str) -> str:
+    """Map a provider model name to a Headroom-compatible compression reference.
+    Headroom uses this to pick the right tokenizer and compression strategy."""
+    m = model.lower()
+    if "gemini" in m:
+        return "gemini-2.0-flash"
+    if "llama" in m:
+        return "llama-3.3-70b"
+    if "deepseek" in m:
+        return "deepseek-chat"
+    if "gpt" in m or "openai" in m:
+        return "gpt-4o"
+    if "claude" in m or "anthropic" in m:
+        return "claude-sonnet-4-5"
+    if "gemma" in m:
+        return "gemma-2-9b"
+    # Fallback: let Headroom auto-detect from the model string itself
+    return model
 
 # Free options first on purpose — they're the headline for a no-cost demo.
 PROVIDERS: Dict[str, Dict] = {
@@ -98,11 +143,42 @@ class LLMError(RuntimeError):
 
 
 def chat(provider: str, model: str, api_key: str, messages: List[Dict],
-         temperature: float = 0.3, json_mode: bool = False) -> str:
+         temperature: float = 0.3, json_mode: bool = False,
+         use_compression: bool = False, compression_mode: str = "library",
+         proxy_port: int = 8787) -> str:
     cfg = PROVIDERS.get(provider)
     if not cfg:
         raise LLMError(f"Unknown provider: {provider}")
     model = (model or cfg["default_model"]).strip()
+
+    # ── Headroom context compression ──────────────────────────────────────
+    if use_compression and _check_headroom():
+        try:
+            if compression_mode == "proxy" and cfg["kind"] == "openai":
+                # Proxy mode: route OpenAI-format calls through the local proxy.
+                # The proxy auto-compresses every request transparently.
+                cfg = dict(cfg)
+                cfg["base_url"] = f"http://localhost:{proxy_port}/v1"
+            else:
+                # Library mode: compress messages in-process.
+                if json_mode:
+                    # Preserve system messages verbatim — they contain the JSON
+                    # schema the model needs to follow.
+                    system = [m for m in messages if m["role"] == "system"]
+                    rest = [m for m in messages if m["role"] != "system"]
+                    if rest:
+                        result = _headroom_compress(rest, model=_compress_ref(model))
+                        messages = system + list(result.messages)
+                else:
+                    result = _headroom_compress(messages, model=_compress_ref(model))
+                    messages = list(result.messages)
+        except Exception:
+            # Fail open: if compression fails for any reason (proxy down, model
+            # not cached, unexpected API), proceed with uncompressed messages.
+            # Print the traceback so it's visible in the terminal for debugging,
+            # but the LLM call must never break because compression failed.
+            traceback.print_exc()
+
     if cfg["kind"] == "anthropic":
         return _anthropic(cfg, model, api_key, messages, temperature)
     if cfg["kind"] == "ollama":
