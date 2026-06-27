@@ -105,6 +105,11 @@ The skills you apply in this single pass:
     depends on that empty role ("requires President approval"). Use a currently
     active role instead — e.g. "requires the Acting Lead's sign-off" or "agreement
     of the active officers" — so the rule is usable now, not someday.
+  * communication_rule: must answer THREE things — (1) where decisions and updates
+    are shared (one primary channel, not scattered DMs), (2) the expected response
+    window (e.g. "within 24 hours" or "same business day"), and (3) what happens
+    when someone doesn't respond (escalation). A rule that only says "weekly meeting"
+    misses the async baseline that causes most communication breakdowns.
   * change_rule: a change-management / review-window rule — how a logged proposal
     or decision can be revised. It must prevent unilateral reversals: e.g. "logged
     proposals get a 48-hour written review window before direction locks; changes
@@ -146,12 +151,17 @@ produce the snapshot."""
 
 
 def run(provider: str, model: str, api_key: str,
-        conversation: List[Dict]) -> Dict:
+        conversation: List[Dict],
+        use_compression: bool = False, compression_mode: str = "library",
+        proxy_port: int = 8787) -> Dict:
     """One agent, one call. Returns
     {type: "final"|"question", text, workspace, skills}."""
     messages = [{"role": "system", "content": AGENT_SYSTEM}] + list(conversation)
     raw = llm.chat(provider, model, api_key, messages,
-                   temperature=0.3, json_mode=True)
+                   temperature=0.3, json_mode=True,
+                   use_compression=use_compression,
+                   compression_mode=compression_mode,
+                   proxy_port=proxy_port)
     data = llm.extract_json(raw)
     if data is None:
         raise llm.LLMError("The model didn't return usable structure. Try "

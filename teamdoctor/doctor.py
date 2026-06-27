@@ -92,7 +92,7 @@ SAMPLE_SPECS: dict = {
             "mission": "Help analysts get answers in seconds.",
             "values": ["Ship weekly", "Own your area", "Customer truth"],
             "decision_rule": "The accountable owner decides after a 10-minute debate.",
-            "communication_rule": "Async by default; one weekly sync.",
+            "communication_rule": "One shared Slack channel for decisions and updates — no side threads without a summary in the main channel. Respond same business day. Founder breaks ties if someone goes quiet.",
             "credit_rule": "Each person presents the part they led."},
         "issues": [
             {"issue": "Tom is a single point of failure", "suggested_owner": "Tom",
@@ -122,7 +122,7 @@ SAMPLE_SPECS: dict = {
             "mission": "Bring more art to the community, sustainably.",
             "values": ["Transparency", "Shared load", "Decide and move"],
             "decision_rule": "One named owner per area decides; co-chairs break ties only.",
-            "communication_rule": "Monthly board meeting + a shared decisions doc.",
+            "communication_rule": "Updates shared in a decisions doc; major items confirmed by email. Respond within 48 hours. Board chair follows up on silence.",
             "credit_rule": "Recognize volunteers publicly at each event."},
         "issues": [
             {"issue": "Every decision needs both co-chairs, so things stall", "suggested_owner": "Dana",
@@ -149,7 +149,7 @@ SAMPLE_SPECS: dict = {
             "mission": "Design and build competitive robots while teaching new members.",
             "values": ["Share responsibility", "Decide together", "Document everything"],
             "decision_rule": "Design choices: majority vote after a one-week limit; lead breaks ties.",
-            "communication_rule": "Weekly meeting + a shared drive updated within 48 hours.",
+            "communication_rule": "One group chat for all team business — no side DMs for decisions. Respond within 24 hours or say you're blocked. If an officer doesn't respond, the advisor follows up.",
             "credit_rule": "Everyone who works on a build is named on the project page."},
         "issues": [
             {"issue": "Alex owns everything and burns out yearly", "suggested_owner": "Alex",
@@ -179,7 +179,7 @@ SAMPLE_SPECS: dict = {
             "mission": "Make six clients measurably more money, every month.",
             "values": ["Own your number", "Show the work", "No surprises"],
             "decision_rule": "The area owner decides; escalate only when it crosses two areas.",
-            "communication_rule": "Async updates daily; one 30-minute weekly sync.",
+            "communication_rule": "One shared channel for updates; respond same day async. Area owner tags the lead if something crosses two areas. Weekly 30-minute sync for decisions.",
             "credit_rule": "Each owner presents their client's results at the weekly sync."},
         "issues": [
             {"issue": "No weekly rhythm yet to catch problems early", "suggested_owner": "Nora",
@@ -207,7 +207,7 @@ SAMPLE_SPECS: dict = {
             "mission": "Be the café this neighborhood can't imagine losing.",
             "values": ["Warm service", "Clean books", "No waste"],
             "decision_rule": "Rosa decides on money and brand; area leads decide day-to-day.",
-            "communication_rule": "A 10-minute pre-shift huddle; a weekly numbers check.",
+            "communication_rule": "Pre-shift huddle + one group chat for urgent items. Respond before your next shift. Owner calls directly if something is stuck.",
             "credit_rule": "Shout out the person behind a great week at the huddle."},
         "issues": [
             {"issue": "Nobody owns finance — cash and bills get handled late", "suggested_owner": "Rosa",
@@ -237,7 +237,7 @@ SAMPLE_SPECS: dict = {
             "mission": "Ship web apps clients love, without heroics.",
             "values": ["Share the load", "Document as you go", "Steady over crunch"],
             "decision_rule": "The area owner decides; Dana stops being the default approver.",
-            "communication_rule": "A short daily check-in; a weekly planning session.",
+            "communication_rule": "One channel for all project updates — no side DMs for decisions. Respond within 24 hours. If the owner is unresponsive, the backup owner steps in.",
             "credit_rule": "Each person owns and presents the part they led."},
         "issues": [
             {"issue": "Dana is Accountable for four of five areas — a single point of failure",
@@ -282,11 +282,16 @@ concrete, and brief."""
 
 
 def extract(provider: str, model: str, api_key: str,
-            conversation: List[Dict]) -> dict:
+            conversation: List[Dict],
+            use_compression: bool = False, compression_mode: str = "library",
+            proxy_port: int = 8787) -> dict:
     """Ask the model to turn the conversation so far into a team spec."""
     messages = [{"role": "system", "content": EXTRACT_SYSTEM}] + conversation
     raw = llm.chat(provider, model, api_key, messages,
-                   temperature=0.2, json_mode=True)
+                   temperature=0.2, json_mode=True,
+                   use_compression=use_compression,
+                   compression_mode=compression_mode,
+                   proxy_port=proxy_port)
     spec = llm.extract_json(raw)
     if spec is None:
         raise llm.LLMError("The model didn't return usable structure. Try "
@@ -599,7 +604,24 @@ MAX_VALUES = 5
 MAX_ISSUES = 6
 
 
-def normalize_charter(d: dict) -> dict:
+_COMM_DEFAULTS = {
+    "club": ("One group chat for all team business — no side DMs for decisions. "
+             "Respond within 24 hours or say you're blocked. If an officer doesn't "
+             "respond, your advisor follows up."),
+    "startup": ("One shared channel for decisions and updates — no side threads "
+                "without a summary in the main channel. Respond same business day. "
+                "Founder/CEO breaks ties if someone goes quiet."),
+    "nonprofit": ("Updates shared in a decisions doc; major items confirmed by email. "
+                  "Respond within 48 hours. Board chair follows up on silence."),
+    "small business": ("Pre-shift huddle + one group chat for urgent items. Respond "
+                       "before your next shift. Owner calls directly if something "
+                       "is stuck."),
+    "team": ("One shared channel for decisions — no side DMs for team business. "
+             "Respond within 24 hours. The lead follows up if someone goes quiet."),
+}
+
+
+def normalize_charter(d: dict, profile: dict = None) -> dict:
     """Validate the charter the agent produced; None if essentially empty."""
     d = d if isinstance(d, dict) else {}
     raw_values = d.get("values", [])
@@ -628,6 +650,9 @@ def normalize_charter(d: dict) -> dict:
             "a written counter-proposal, not a verbal override. When fewer than two "
             "active decision-makers are available to review, your designated approver "
             "(advisor, board, or owner) signs off instead.")
+    if not charter["communication_rule"]:
+        kind = (profile or {}).get("kind", "team")
+        charter["communication_rule"] = _COMM_DEFAULTS.get(kind, _COMM_DEFAULTS["team"])
     return charter
 
 
@@ -676,7 +701,10 @@ def normalize_issues(lst: list) -> list:
 def build_workspace(data: dict) -> tuple:
     """Assemble a full workspace from ONE agent response, running the deterministic
     engine locally. Returns (workspace, skills_applied)."""
-    charter = normalize_charter(data.get("charter"))
+    profile = health.profile_for(
+        " ".join([data.get("team_name", "") or "", data.get("mission", "") or "",
+                  data.get("_source_text", "") or ""]))
+    charter = normalize_charter(data.get("charter"), profile)
     # If the agent only put the mission in the charter, feed it back so the coach
     # knows a foundation exists.
     if charter and charter.get("mission") and not data.get("mission"):
@@ -748,13 +776,18 @@ def build_workspace(data: dict) -> tuple:
 
 
 def answer(provider: str, model: str, api_key: str, workspace: dict,
-           conversation: List[Dict]) -> str:
+           conversation: List[Dict],
+           use_compression: bool = False, compression_mode: str = "library",
+           proxy_port: int = 8787) -> str:
     """Answer a follow-up question, grounded in everything the agent built."""
     context = workspace_context(workspace)
     messages = [{"role": "system",
                  "content": ANSWER_SYSTEM + "\n\nWHAT WE BUILT:\n" + context}]
     messages += conversation
-    return llm.chat(provider, model, api_key, messages, temperature=0.4)
+    return llm.chat(provider, model, api_key, messages, temperature=0.4,
+                    use_compression=use_compression,
+                    compression_mode=compression_mode,
+                    proxy_port=proxy_port)
 
 
 # ── text helpers ──────────────────────────────────────────────────────────────
